@@ -146,3 +146,24 @@ backend/
 - [ ] Leaderboard / study-with-friends mode
 - [ ] Gamification (badges, level system)
 - [ ] Multi-language support
+
+---
+
+## 9. Recent Updates (March 2026 — Sprint 2)
+
+### Visual Identity Overhaul
+- Premium deep dark theme: `#080D1A` bg, `#0F1829` surfaces, `#1A2540` highlights
+- New gradient token system (`GRADIENTS`) in `colors.ts`: study (neon-mint→cyan), break (emerald), secondary (orange→amber), hours (deep blue→cyan)
+- Dashboard: Total Hours card → `LinearGradient` (deep blue→cyan)
+- Dashboard: Quick action buttons → full gradient fills (study/secondary)
+- `expo-linear-gradient@55.0.9` added
+
+### Pomodoro Custom Durations
+- 4 pill-shaped duration chips: **25 / 40 / 50 / 60 min**
+- Active chip = gradient fill; inactive = dark surface + border
+- Selecting a chip resets timer to new duration immediately
+
+### Dynamic Subject Management
+- Bottom sheet supports full CRUD: Add (text input + gradient Add btn), Delete (trash icon)
+- Premium modal: sheet handle, gradient radio dots, "X" close, "Done" CTA
+- Minimum 1 subject guard (prevents deleting last subject)

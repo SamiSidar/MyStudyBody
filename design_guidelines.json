@@ -1,0 +1,142 @@
+{
+  "theme_and_archetype": {
+    "domain": "Education/Productivity",
+    "theme": "Dark Mode Default (with Light Mode toggle)",
+    "archetype": "Mix of Performance Pro & Vibrant Play",
+    "vibe": "Energetic, Motivating, Focus-driven, Modern",
+    "rationale": "High school and college students need a tool that feels fast, engaging, and non-clinical. The vibrant blue and orange create an energetic contrast against the deep dark background, turning studying into a 'command-center' experience rather than a chore."
+  },
+  "color_palette": {
+    "dark": {
+      "background": "#0F172A",
+      "surface": "#1E293B",
+      "surface_highlight": "#334155",
+      "primary": "#2979FF",
+      "primary_hover": "#1E40AF",
+      "secondary": "#FF6D00",
+      "text_primary": "#F8FAFC",
+      "text_secondary": "#94A3B8",
+      "border": "#334155",
+      "success": "#10B981",
+      "error": "#EF4444",
+      "tab_bar_bg": "#0F172A",
+      "tab_bar_active": "#2979FF",
+      "tab_bar_inactive": "#64748B"
+    },
+    "light": {
+      "background": "#F8FAFC",
+      "surface": "#FFFFFF",
+      "surface_highlight": "#E2E8F0",
+      "primary": "#2979FF",
+      "primary_hover": "#1E40AF",
+      "secondary": "#FF6D00",
+      "text_primary": "#0F172A",
+      "text_secondary": "#64748B",
+      "border": "#E2E8F0",
+      "success": "#10B981",
+      "error": "#EF4444",
+      "tab_bar_bg": "#FFFFFF",
+      "tab_bar_active": "#2979FF",
+      "tab_bar_inactive": "#94A3B8"
+    }
+  },
+  "typography": {
+    "strategy": "Clean, highly readable geometric sans-serif (System fonts: SF Pro on iOS, Roboto on Android) with distinct weight contrasts.",
+    "sizes": {
+      "h1": { "fontSize": 32, "fontWeight": "800", "letterSpacing": -0.5, "lineHeight": 40 },
+      "h2": { "fontSize": 24, "fontWeight": "700", "letterSpacing": -0.3, "lineHeight": 32 },
+      "h3": { "fontSize": 20, "fontWeight": "600", "lineHeight": 28 },
+      "body_large": { "fontSize": 18, "fontWeight": "400", "lineHeight": 28 },
+      "body": { "fontSize": 16, "fontWeight": "400", "lineHeight": 24 },
+      "body_bold": { "fontSize": 16, "fontWeight": "600", "lineHeight": 24 },
+      "caption": { "fontSize": 14, "fontWeight": "500", "letterSpacing": 0.2, "lineHeight": 20 },
+      "overline": { "fontSize": 12, "fontWeight": "700", "letterSpacing": 1.2, "textTransform": "uppercase" }
+    }
+  },
+  "spacing_and_layout": {
+    "strategy": "Generous spacing. Avoid cramped screens. Use large touch targets.",
+    "container_padding": 24,
+    "card_padding": 20,
+    "border_radius": {
+      "sm": 8,
+      "md": 12,
+      "lg": 16,
+      "xl": 24,
+      "pill": 9999
+    },
+    "gap": {
+      "sm": 8,
+      "md": 16,
+      "lg": 24,
+      "xl": 32
+    }
+  },
+  "components_strategy": {
+    "buttons": {
+      "primary": "Solid #2979FF background, rounded-pill (9999px), generous height (min 56px) for easy tapping, centered bold text.",
+      "secondary": "Solid #FF6D00 background or outlined, used for highly distinct actions like 'Start Pomodoro'.",
+      "action": "Small icon-based buttons within cards. Use subtle surface_highlight backgrounds."
+    },
+    "cards": {
+      "style": "Flat with crisp rounded corners (16px). In dark mode, rely on surface color contrast (#1E293B on #0F172A) rather than shadows. In light mode, use subtle shadows (elevation: 2, shadowOpacity: 0.05).",
+      "layout": "Flexbox, standard gaps (16px), right-aligned action icons."
+    },
+    "inputs": {
+      "style": "Large tap areas (min-height 50px), filled background (surface_highlight), subtle border on focus, 12px border radius."
+    },
+    "navigation": {
+      "bottom_tabs": "Minimalist. Hide labels if possible or keep them tiny. Highlight active tab with #2979FF tint and a small dot indicator below the icon."
+    },
+    "charts": {
+      "recommendation": "Use react-native-chart-kit or react-native-gifted-charts. Ensure charts use the primary (#2979FF) and secondary (#FF6D00) colors. Hide grid lines for a cleaner, modern look. Use bezier curves for line charts."
+    }
+  },
+  "screens": {
+    "Dashboard": {
+      "layout": "Vertical scroll. Top: Greeting & Motivation. Middle: Weekly Study Hours Chart. Bottom: Weak Subjects (Bento-style grid) and Quick Action floating buttons."
+    },
+    "Pomodoro_Timer": {
+      "layout": "Centered massive timer display. High contrast. H1 typography. Subject selector dropdown above the timer. 'Start/Pause' massive pill button below.",
+      "vibe": "Command-center focus. Minimal distractions."
+    },
+    "Error_Scanner": {
+      "layout": "Camera viewfinder simulation taking up top 60% of screen. 'Capture' button and 'Gallery' icon. Bottom sheet for mock AI analysis loading state and auto-fill form.",
+      "visuals": "Use futuristic neon styling for the scanner overlay (reticle, scanning line animation)."
+    },
+    "AI_Reports": {
+      "layout": "Data-heavy but clean. Tab toggle for 'Weekly' / 'Monthly'. Bar/Line charts for mistake trends. Scrollable list of 'AI Recommended Study Plan' below."
+    }
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.unsplash.com/photo-1596496555041-9e0f141ca4b7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzd8MHwxfHNlYXJjaHwzfHxzdHVkZW50JTIwcmVhZGluZ3xlbnwwfHx8fDE3NzQ0ODYwNTh8MA&ixlib=rb-4.1.0&q=85",
+        "category": "Dashboard Greeting or Empty States",
+        "description": "Student studying, use as header background or motivation card."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1623307019152-1ee797183f1d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjV8MHwxfHNlYXJjaHwyfHxmdXR1cmlzdGljJTIwc2Nhbm5pbmclMjBuZW9ufGVufDB8fHx8MTc3NDQ4NjA1OXww&ixlib=rb-4.1.0&q=85",
+        "category": "Error Scanner Overlay / AI Loading",
+        "description": "Abstract neon UI scanning interface."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1658806277165-af0b60eb6733?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzJ8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMG1vZGVybiUyMHRlY2hub2xvZ3l8ZW58MHx8fGJsdWV8MTc3NDQ4NjA2MHww&ixlib=rb-4.1.0&q=85",
+        "category": "Settings/Profile Header",
+        "description": "Abstract modern technology background."
+      }
+    ]
+  },
+  "testing": {
+    "directives": "All interactive elements, buttons, inputs, and major views MUST include a `data-testid` attribute (e.g., `data-testid=\"start-pomodoro-button\"`)."
+  },
+  "instructions_to_main_agent": [
+    "Use standard React Native components (View, Text, TouchableOpacity, ScrollView).",
+    "Use Expo Vector Icons (e.g., Ionicons, Feather) for all iconography.",
+    "Implement navigation using @react-navigation/bottom-tabs.",
+    "For the theme toggle, use a simple React Context holding 'light' or 'dark' state.",
+    "Mock all data locally (study hours, weak subjects, AI insights). No backend required.",
+    "Use StyleSheet.create for all styling, referencing the color palette defined here.",
+    "Ensure the Pomodoro timer actually counts down and manages the 25m/5m states.",
+    "Simulate the Error Scanner using a View with a border overlay, and a setTimeout to mock the 'AI analyzing...' state before showing form results."
+  ]
+}

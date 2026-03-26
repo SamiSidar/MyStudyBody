@@ -4,8 +4,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
+import { GRADIENTS } from '../../src/constants/colors';
 import { MOCK_WEEKLY_HOURS, MOCK_WEAK_SUBJECTS, DAYS } from '../../src/constants/mockData';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -74,7 +76,13 @@ export default function Dashboard() {
         </View>
 
         {/* Total Hours Card */}
-        <View testID="total-hours-card" style={s.hoursCard}>
+        <LinearGradient
+          testID="total-hours-card"
+          colors={GRADIENTS.hours as any}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={s.hoursCard}
+        >
           <View>
             <Text style={s.hoursCardLabel}>Total Study Hours</Text>
             <Text style={s.hoursCardSub}>This Week</Text>
@@ -84,7 +92,7 @@ export default function Dashboard() {
             <Ionicons name="flame" size={20} color={colors.secondary} />
             <Text style={s.streakText}>5 day{'\n'}streak</Text>
           </View>
-        </View>
+        </LinearGradient>
 
         {/* Daily Activity Chart */}
         <View testID="weekly-chart" style={s.card}>
@@ -133,19 +141,25 @@ export default function Dashboard() {
         <View style={s.actionsRow}>
           <TouchableOpacity
             testID="start-pomodoro-btn"
-            style={[s.actionBtn, { backgroundColor: colors.primary }]}
+            style={s.actionBtn}
             onPress={() => router.push('/(tabs)/pomodoro')}
+            activeOpacity={0.85}
           >
-            <Ionicons name="timer-outline" size={26} color="#fff" />
-            <Text style={s.actionText}>Start{'\n'}Pomodoro</Text>
+            <LinearGradient colors={GRADIENTS.study as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.actionGrad}>
+              <Ionicons name="timer-outline" size={26} color="#fff" />
+              <Text style={s.actionText}>Start{'\n'}Pomodoro</Text>
+            </LinearGradient>
           </TouchableOpacity>
           <TouchableOpacity
             testID="scan-error-btn"
-            style={[s.actionBtn, { backgroundColor: colors.secondary }]}
+            style={s.actionBtn}
             onPress={() => router.push('/(tabs)/scanner')}
+            activeOpacity={0.85}
           >
-            <Ionicons name="scan-outline" size={26} color="#fff" />
-            <Text style={s.actionText}>Scan{'\n'}Error</Text>
+            <LinearGradient colors={GRADIENTS.secondary as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.actionGrad}>
+              <Ionicons name="scan-outline" size={26} color="#fff" />
+              <Text style={s.actionText}>Scan{'\n'}Error</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -161,7 +175,7 @@ const makeStyles = (colors: any) =>
     greeting: { fontSize: 24, fontWeight: '800', color: colors.textPrimary },
     subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 3 },
     themeBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-    hoursCard: { backgroundColor: colors.primary, borderRadius: 20, padding: 22, marginBottom: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    hoursCard: { borderRadius: 20, padding: 22, marginBottom: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     hoursCardLabel: { fontSize: 14, color: 'rgba(255,255,255,0.85)', fontWeight: '500' },
     hoursCardSub: { fontSize: 13, color: 'rgba(255,255,255,0.65)' },
     hoursValue: { fontSize: 52, fontWeight: '900', color: '#fff', marginTop: 6 },
@@ -185,6 +199,7 @@ const makeStyles = (colors: any) =>
     errorCount: { fontSize: 20, fontWeight: '800', color: colors.error },
     errorLabel: { fontSize: 10, color: colors.error, fontWeight: '600' },
     actionsRow: { flexDirection: 'row', gap: 14, marginBottom: 8 },
-    actionBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 22, borderRadius: 18 },
+    actionBtn: { flex: 1, borderRadius: 18, overflow: 'hidden' },
+    actionGrad: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 22 },
     actionText: { color: '#fff', fontWeight: '700', fontSize: 14, textAlign: 'center' },
   });

@@ -8,51 +8,110 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List
 import uuid
-from datetime import datetime
-
+from datetime import datetime, timezone, timedelta
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Create the main app without a prefix
 app = FastAPI()
-
-# Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
 
-# Define Models
-class StatusCheck(BaseModel):
+# ── Models ──────────────────────────────────────────────
+class StudySession(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    subject: str
+    duration_minutes: int
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
 
-# Add your routes to the router instead of directly to app
+class StudySessionCreate(BaseModel):
+    subject: str
+    duration_minutes: int
+
+
+class ErrorScan(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    subject: str
+    topic: str
+    notes: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ErrorScanCreate(BaseModel):
+    subject: str
+    topic: str
+    notes: str = ""
+
+
+# ── Routes ──────────────────────────────────────────────
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "MyStudyBody API v1"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
+@api_router.post("/sessions", response_model=StudySession)
+async def create_session(body: StudySessionCreate):
+    session = StudySession(**body.dict())
+    await db.study_sessions.insert_one(session.dict())
+    return session
 
-# Include the router in the main app
+
+@api_router.get("/sessions", response_model=List[StudySession])
+async def get_sessions():
+    docs = await db.study_sessions.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return docs
+
+
+@api_router.get("/stats/weekly")
+async def get_weekly_stats():
+    """Hours studied per day (Mon–Sun) for the current ISO week."""
+    now = datetime.now(timezone.utc)
+    week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    docs = await db.study_sessions.find({"created_at": {"$gte": week_start}}, {"_id": 0}).to_list(1000)
+    daily_mins = [0] * 7
+    for d in docs:
+        ts = d.get("created_at")
+        if isinstance(ts, datetime):
+            idx = ts.weekday()
+            if 0 <= idx <= 6:
+                daily_mins[idx] += d.get("duration_minutes", 0)
+    daily_hours = [round(m / 60, 1) for m in daily_mins]
+    return {"daily_hours": daily_hours, "total_hours": round(sum(daily_mins) / 60, 1)}
+
+
+@api_router.post("/errors", response_model=ErrorScan)
+async def create_error(body: ErrorScanCreate):
+    err = ErrorScan(**body.dict())
+    await db.error_scans.insert_one(err.dict())
+    return err
+
+
+@api_router.get("/errors", response_model=List[ErrorScan])
+async def get_errors():
+    docs = await db.error_scans.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return docs
+
+
+@api_router.get("/stats/errors")
+async def get_error_stats():
+    """Error count per subject with unique topics."""
+    docs = await db.error_scans.find({}, {"_id": 0}).to_list(1000)
+    stats: dict = {}
+    for d in docs:
+        subj = d["subject"]
+        if subj not in stats:
+            stats[subj] = {"subject": subj, "errors": 0, "topics": []}
+        stats[subj]["errors"] += 1
+        if d["topic"] not in stats[subj]["topics"]:
+            stats[subj]["topics"].append(d["topic"])
+    return sorted(stats.values(), key=lambda x: x["errors"], reverse=True)
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -63,12 +122,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

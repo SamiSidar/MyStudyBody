@@ -10,8 +10,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SUBJECTS } from '../../src/constants/mockData';
 import { GRADIENTS } from '../../src/constants/colors';
 import { F } from '../../src/constants/fonts';
+import { apiFetch } from '../../src/utils/api';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const BREAK_MINS = 5;
 const DURATION_OPTIONS = [25, 40, 50, 60];
 const RING_SIZE = 270;
@@ -133,9 +133,8 @@ export default function PomodoroScreen() {
     const mins = Math.max(1, Math.round(elapsed / 60));
     setSavingSession(true);
     try {
-      await fetch(`${BACKEND_URL}/api/sessions`, {
+      await apiFetch('/api/sessions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subject: selectedSubject, duration_minutes: mins }),
       });
       Alert.alert('Saved', `${selectedSubject} — ${mins} min logged.`);

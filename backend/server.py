@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Header
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -45,6 +45,7 @@ class UserResponse(BaseModel):
 
 class StudySession(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
     subject: str
     duration_minutes: int
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -57,6 +58,7 @@ class StudySessionCreate(BaseModel):
 
 class ErrorScan(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
     subject: str
     topic: str
     notes: str = ""
@@ -103,25 +105,37 @@ async def root():
     return {"message": "MyStudyBody API v1"}
 
 
+def require_user(x_user_id: Optional[str]) -> str:
+    """Raise 401 if user header is missing."""
+    if not x_user_id:
+        raise HTTPException(status_code=401, detail="Authentication required. Send X-User-ID header.")
+    return x_user_id
+
+
 @api_router.post("/sessions", response_model=StudySession)
-async def create_session(body: StudySessionCreate):
-    session = StudySession(**body.dict())
+async def create_session(body: StudySessionCreate, x_user_id: Optional[str] = Header(default=None)):
+    uid = require_user(x_user_id)
+    session = StudySession(user_id=uid, **body.dict())
     await db.study_sessions.insert_one(session.dict())
     return session
 
 
 @api_router.get("/sessions", response_model=List[StudySession])
-async def get_sessions():
-    docs = await db.study_sessions.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+async def get_sessions(x_user_id: Optional[str] = Header(default=None)):
+    uid = require_user(x_user_id)
+    docs = await db.study_sessions.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return docs
 
 
 @api_router.get("/stats/weekly")
-async def get_weekly_stats():
-    """Hours studied per day (Mon–Sun) for the current ISO week."""
+async def get_weekly_stats(x_user_id: Optional[str] = Header(default=None)):
+    """Hours studied per day (Mon–Sun) for the current ISO week, filtered by user."""
+    uid = require_user(x_user_id)
     now = datetime.now(timezone.utc)
     week_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-    docs = await db.study_sessions.find({"created_at": {"$gte": week_start}}, {"_id": 0}).to_list(1000)
+    docs = await db.study_sessions.find(
+        {"user_id": uid, "created_at": {"$gte": week_start}}, {"_id": 0}
+    ).to_list(1000)
     daily_mins = [0] * 7
     for d in docs:
         ts = d.get("created_at")
@@ -134,22 +148,25 @@ async def get_weekly_stats():
 
 
 @api_router.post("/errors", response_model=ErrorScan)
-async def create_error(body: ErrorScanCreate):
-    err = ErrorScan(**body.dict())
+async def create_error(body: ErrorScanCreate, x_user_id: Optional[str] = Header(default=None)):
+    uid = require_user(x_user_id)
+    err = ErrorScan(user_id=uid, **body.dict())
     await db.error_scans.insert_one(err.dict())
     return err
 
 
 @api_router.get("/errors", response_model=List[ErrorScan])
-async def get_errors():
-    docs = await db.error_scans.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+async def get_errors(x_user_id: Optional[str] = Header(default=None)):
+    uid = require_user(x_user_id)
+    docs = await db.error_scans.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return docs
 
 
 @api_router.get("/stats/errors")
-async def get_error_stats():
-    """Error count per subject with unique topics."""
-    docs = await db.error_scans.find({}, {"_id": 0}).to_list(1000)
+async def get_error_stats(x_user_id: Optional[str] = Header(default=None)):
+    """Error count per subject with unique topics, filtered by user."""
+    uid = require_user(x_user_id)
+    docs = await db.error_scans.find({"user_id": uid}, {"_id": 0}).to_list(1000)
     stats: dict = {}
     for d in docs:
         subj = d["subject"]

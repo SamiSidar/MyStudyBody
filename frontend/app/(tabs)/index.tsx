@@ -10,8 +10,8 @@ import { GRADIENTS } from '../../src/constants/colors';
 import { MOCK_WEEKLY_HOURS, MOCK_WEAK_SUBJECTS, DAYS } from '../../src/constants/mockData';
 import { F } from '../../src/constants/fonts';
 import { useAuth } from '../../src/context/AuthContext';
+import { apiFetch } from '../../src/utils/api';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const BAR_MAX_H = 80;
 
 // Premium dark palette
@@ -41,8 +41,8 @@ export default function Dashboard() {
   const fetchData = async () => {
     try {
       const [wRes, eRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/api/stats/weekly`),
-        fetch(`${BACKEND_URL}/api/stats/errors`),
+        apiFetch('/api/stats/weekly'),
+        apiFetch('/api/stats/errors'),
       ]);
       if (wRes.ok) {
         const d = await wRes.json();

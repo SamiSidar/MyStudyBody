@@ -11,8 +11,8 @@ import {
 import { GRADIENTS } from '../../src/constants/colors';
 import { F } from '../../src/constants/fonts';
 import { useAuth } from '../../src/context/AuthContext';
+import { apiFetch } from '../../src/utils/api';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const BAR_MAX_H = 100;
 type Period = 'weekly' | 'monthly';
 
@@ -43,7 +43,7 @@ export default function ReportsScreen() {
 
   const fetchErrors = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/stats/errors`);
+      const res = await apiFetch('/api/stats/errors');
       if (res.ok) {
         const data = await res.json();
         if (data.length > 0) {

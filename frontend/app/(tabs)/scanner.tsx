@@ -12,8 +12,9 @@ import { SUBJECTS, MOCK_ERROR_TOPICS } from '../../src/constants/mockData';
 import { GRADIENTS } from '../../src/constants/colors';
 import { F } from '../../src/constants/fonts';
 import { useAuth } from '../../src/context/AuthContext';
+import { apiFetch } from '../../src/utils/api';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const BACKEND_URL = undefined; // unused - using apiFetch
 type Phase = 'viewfinder' | 'analyzing' | 'form';
 
 const BG = '#080D1A';
@@ -112,9 +113,8 @@ export default function ScannerScreen() {
 
   const handleSaveError = async () => {
     try {
-      await fetch(`${BACKEND_URL}/api/errors`, {
+      await apiFetch('/api/errors', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subject: autoSubject, topic: autoTopic, notes }),
       });
     } catch (_) {}

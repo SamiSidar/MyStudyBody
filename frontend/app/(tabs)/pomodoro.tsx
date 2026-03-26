@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as KeepAwake from 'expo-keep-awake';
+import * as Notifications from 'expo-notifications';
 import { SUBJECTS } from '../../src/constants/mockData';
 import { GRADIENTS } from '../../src/constants/colors';
 import { F } from '../../src/constants/fonts';
@@ -54,6 +56,13 @@ export default function PomodoroScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [newSubjectInput, setNewSubjectInput] = useState('');
 
+  // ── Focus Shield State ──────────────────────────────
+  const [focusShield, setFocusShield] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<boolean | null>(null);
+  const shieldPulse = useRef(new Animated.Value(1)).current;
+  const shieldGlow = useRef(new Animated.Value(0)).current;
+  const shieldPulseRef = useRef<Animated.CompositeAnimation | null>(null);
+
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseRef = useRef<Animated.CompositeAnimation | null>(null);
 
@@ -61,6 +70,64 @@ export default function PomodoroScreen() {
   const progress = Math.min(1, (totalSecs - timeLeft) / totalSecs);
   const activeGradient = (mode === 'study' ? GRADIENTS.study : GRADIENTS.break) as [string, string];
   const btnGradient = (isRunning ? GRADIENTS.secondary : activeGradient) as [string, string];
+
+  // ── Focus Shield: Keep awake + notification management ──
+  useEffect(() => {
+    const shieldIsActive = focusShield && isRunning && mode === 'study';
+
+    if (shieldIsActive) {
+      // Keep screen awake
+      KeepAwake.activateKeepAwakeAsync().catch(() => {});
+
+      // Suppress all pending local notifications during focus
+      Notifications.cancelAllScheduledNotificationsAsync().catch(() => {});
+
+      // Start shield pulse animation
+      shieldPulseRef.current = Animated.loop(
+        Animated.sequence([
+          Animated.parallel([
+            Animated.timing(shieldPulse, { toValue: 1.08, duration: 1500, useNativeDriver: true }),
+            Animated.timing(shieldGlow, { toValue: 1, duration: 1500, useNativeDriver: true }),
+          ]),
+          Animated.parallel([
+            Animated.timing(shieldPulse, { toValue: 1.0, duration: 1500, useNativeDriver: true }),
+            Animated.timing(shieldGlow, { toValue: 0.3, duration: 1500, useNativeDriver: true }),
+          ]),
+        ])
+      );
+      shieldPulseRef.current.start();
+    } else {
+      // Release screen
+      KeepAwake.deactivateKeepAwake().catch(() => {});
+
+      // Stop shield animation
+      shieldPulseRef.current?.stop();
+      Animated.parallel([
+        Animated.timing(shieldPulse, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.timing(shieldGlow, { toValue: 0, duration: 300, useNativeDriver: true }),
+      ]).start();
+    }
+
+    return () => {
+      KeepAwake.deactivateKeepAwake().catch(() => {});
+      shieldPulseRef.current?.stop();
+    };
+  }, [focusShield, isRunning, mode]);
+
+  // Request notification permission when focus shield is toggled on
+  const toggleFocusShield = async () => {
+    if (!focusShield) {
+      // Turning ON — request permission first
+      try {
+        const { status } = await Notifications.requestPermissionsAsync();
+        setNotifPermission(status === 'granted');
+      } catch (_) {}
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setFocusShield((v) => !v);
+  };
 
   // Pulse glow when running
   useEffect(() => {
@@ -284,6 +351,88 @@ export default function PomodoroScreen() {
             </View>
           ))}
         </View>
+
+        {/* ── Focus Shield Card ── */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={toggleFocusShield}
+          style={[
+            s.shieldCard,
+            focusShield && s.shieldCardActive,
+          ]}
+        >
+          {/* Animated glow bg */}
+          {focusShield && (
+            <Animated.View
+              style={[
+                StyleSheet.absoluteFillObject,
+                s.shieldGlowBg,
+                { opacity: shieldGlow },
+              ]}
+            />
+          )}
+
+          <View style={s.shieldLeft}>
+            <Animated.View
+              style={[
+                s.shieldIconWrap,
+                focusShield && s.shieldIconWrapActive,
+                { transform: [{ scale: focusShield ? shieldPulse : 1 }] },
+              ]}
+            >
+              <Feather
+                name="shield"
+                size={26}
+                color={focusShield ? '#10B981' : MUTED}
+              />
+            </Animated.View>
+            <View style={s.shieldTextWrap}>
+              <Text style={[s.shieldTitle, focusShield && s.shieldTitleActive]}>
+                {focusShield ? 'ODAK KALKANI AKTİF' : 'Odak Kalkanı'}
+              </Text>
+              <Text style={s.shieldSub}>
+                {focusShield
+                  ? 'Dikkatini dağıtacak her şey engellendi'
+                  : 'Bildirim ve dikkat dağıtıcıları engelle'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Toggle indicator */}
+          <View style={[s.shieldToggle, focusShield && s.shieldToggleOn]}>
+            <View style={[s.shieldToggleDot, focusShield && s.shieldToggleDotOn]} />
+          </View>
+        </TouchableOpacity>
+
+        {/* Protection details when active */}
+        {focusShield && (
+          <View style={s.protectionList}>
+            {[
+              { icon: 'monitor', label: 'Ekran uyanık kalır', ok: true },
+              { icon: 'bell-off', label: 'Bildirimler sessize alındı', ok: true },
+              { icon: 'moon', label: 'Derin odak modu açık', ok: true },
+              {
+                icon: notifPermission === false ? 'alert-circle' : 'check-circle',
+                label: notifPermission === false
+                  ? 'Bildirim izni gerekiyor'
+                  : 'Bildirim izni verildi',
+                ok: notifPermission !== false,
+              },
+            ].map((item, i) => (
+              <View key={i} style={s.protectionItem}>
+                <Feather
+                  name={item.icon as any}
+                  size={14}
+                  color={item.ok ? '#10B981' : '#F59E0B'}
+                />
+                <Text style={[s.protectionText, !item.ok && { color: '#F59E0B' }]}>
+                  {item.label}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
       </ScrollView>
 
       {/* Subject Picker Modal */}
@@ -404,10 +553,88 @@ const s = StyleSheet.create({
   mainBtn: { width: 136, height: 64, borderRadius: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   mainBtnText: { fontSize: 18, fontFamily: F.xbld, color: '#fff' },
 
-  statsRow: { flexDirection: 'row', gap: 12, width: '100%' },
+  statsRow: { flexDirection: 'row', gap: 12, width: '100%', marginBottom: 20 },
   statCard: { flex: 1, borderRadius: 16, padding: 16, alignItems: 'center', backgroundColor: SURFACE },
   statValue: { fontSize: 22, fontFamily: F.xbld },
   statLabel: { fontSize: 11, fontFamily: F.sem, color: MUTED, marginTop: 4, textAlign: 'center' },
+
+  // ── Focus Shield ──────────────────────────────────────
+  shieldCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: SURFACE,
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1.5,
+    borderColor: SURFACE_HL,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  shieldCardActive: {
+    borderColor: 'rgba(16,185,129,0.5)',
+    backgroundColor: '#0B1F1A',
+  },
+  shieldGlowBg: {
+    backgroundColor: 'rgba(16,185,129,0.08)',
+    borderRadius: 18,
+  },
+  shieldLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
+  shieldIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: 'rgba(113,128,150,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(113,128,150,0.2)',
+  },
+  shieldIconWrapActive: {
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    borderColor: 'rgba(16,185,129,0.4)',
+  },
+  shieldTextWrap: { flex: 1 },
+  shieldTitle: { fontSize: 14, fontFamily: F.bld, color: MUTED },
+  shieldTitleActive: { color: '#10B981', letterSpacing: 0.5 },
+  shieldSub: { fontSize: 11, fontFamily: F.reg, color: MUTED, marginTop: 3, lineHeight: 16 },
+
+  // Toggle switch
+  shieldToggle: {
+    width: 46,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: SURFACE_HL,
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  shieldToggleOn: { backgroundColor: '#10B981' },
+  shieldToggleDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: MUTED,
+    alignSelf: 'flex-start',
+  },
+  shieldToggleDotOn: {
+    backgroundColor: '#fff',
+    alignSelf: 'flex-end',
+  },
+
+  // Protection list
+  protectionList: {
+    width: '100%',
+    backgroundColor: '#0B1F1A',
+    borderRadius: 14,
+    padding: 16,
+    gap: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.2)',
+  },
+  protectionItem: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  protectionText: { fontSize: 13, fontFamily: F.reg, color: '#D1FAE5' },
 
   // Modal
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },

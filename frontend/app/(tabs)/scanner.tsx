@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SUBJECTS, MOCK_ERROR_TOPICS } from '../../src/constants/mockData';
 import { GRADIENTS } from '../../src/constants/colors';
 import { F } from '../../src/constants/fonts';
+import { useAuth } from '../../src/context/AuthContext';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 type Phase = 'viewfinder' | 'analyzing' | 'form';
@@ -31,6 +32,7 @@ const PRO_TIPS = [
 ];
 
 export default function ScannerScreen() {
+  const { user } = useAuth();
   const [phase, setPhase] = useState<Phase>('viewfinder');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [autoSubject, setAutoSubject] = useState('Math');
@@ -142,7 +144,7 @@ export default function ScannerScreen() {
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.formContent}>
             {/* Header */}
             <View style={s.header}>
-              <Text style={s.appTitle}>MyStudyBody</Text>
+              <Text style={s.appTitle}>{user?.username || 'MyStudyBody'}</Text>
               <TouchableOpacity onPress={resetScanner} style={s.closeBtn}>
                 <Feather name="x" size={20} color={MUTED} />
               </TouchableOpacity>

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,9 +6,10 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 import uuid
 from datetime import datetime, timezone, timedelta
+from passlib.context import CryptContext
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -21,7 +22,27 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
 # ── Models ──────────────────────────────────────────────
+class UserRegister(BaseModel):
+    username: str
+    email: str
+    password: str
+
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: str
+    username: str
+    email: str
+
+
 class StudySession(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     subject: str
@@ -46,6 +67,34 @@ class ErrorScanCreate(BaseModel):
     subject: str
     topic: str
     notes: str = ""
+
+
+@api_router.post("/auth/register", response_model=UserResponse)
+async def register_user(body: UserRegister):
+    existing = await db.users.find_one({"email": body.email})
+    if existing:
+        raise HTTPException(status_code=400, detail="This email is already registered")
+    existing_username = await db.users.find_one({"username": body.username})
+    if existing_username:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    user_id = str(uuid.uuid4())
+    user_doc = {
+        "id": user_id,
+        "username": body.username,
+        "email": body.email,
+        "password_hash": pwd_context.hash(body.password),
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.users.insert_one(user_doc)
+    return UserResponse(id=user_id, username=body.username, email=body.email)
+
+
+@api_router.post("/auth/login", response_model=UserResponse)
+async def login_user(body: UserLogin):
+    user_doc = await db.users.find_one({"email": body.email})
+    if not user_doc or not pwd_context.verify(body.password, user_doc["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    return UserResponse(id=user_doc["id"], username=user_doc["username"], email=user_doc["email"])
 
 
 # ── Routes ──────────────────────────────────────────────

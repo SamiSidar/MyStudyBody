@@ -10,6 +10,7 @@ import {
 } from '../../src/constants/mockData';
 import { GRADIENTS } from '../../src/constants/colors';
 import { F } from '../../src/constants/fonts';
+import { useAuth } from '../../src/context/AuthContext';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const BAR_MAX_H = 100;
@@ -34,6 +35,7 @@ const PLAN_ICONS = [
 ];
 
 export default function ReportsScreen() {
+  const { user } = useAuth();
   const [period, setPeriod] = useState<Period>('weekly');
   const [errorData, setErrorData] = useState(MOCK_WEEKLY_ERRORS);
   const [realWeeklyData, setRealWeeklyData] = useState<typeof MOCK_WEEKLY_ERRORS | null>(null);
@@ -85,7 +87,7 @@ export default function ReportsScreen() {
             <View style={s.avatar}>
               <Feather name="user" size={16} color={CYAN} />
             </View>
-            <Text style={s.appTitle}>MyStudyBody</Text>
+            <Text style={s.appTitle}>{user?.username || 'MyStudyBody'}</Text>
           </View>
           <View style={s.streakBadge}>
             <Text style={s.streakNum}>7</Text>

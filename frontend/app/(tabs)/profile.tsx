@@ -8,6 +8,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { GRADIENTS } from '../../src/constants/colors';
 import { useTheme } from '../../src/context/ThemeContext';
 import { F } from '../../src/constants/fonts';
+import { useAuth } from '../../src/context/AuthContext';
+import { useRouter } from 'expo-router';
 
 const BG = '#080D1A';
 const SURFACE = '#0F1829';
@@ -39,9 +41,20 @@ const INFO_LINKS = [
 
 export default function ProfileScreen() {
   const { toggleTheme, theme } = useTheme();
+  const { user, logout } = useAuth();
+  const router = useRouter();
   const [notifs, setNotifs] = useState(true);
   const [sound, setSound] = useState(true);
   const [reminders, setReminders] = useState(false);
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace('/(auth)/login');
+  };
+
+  const displayName = user?.username || 'Kullanıcı';
+  const displayEmail = user?.email || '';
+  const avatarInitial = displayName[0].toUpperCase();
 
   const getToggleValue = (label: string) => {
     if (label === 'Notifications') return notifs;
@@ -64,7 +77,7 @@ export default function ProfileScreen() {
 
         {/* Header */}
         <View style={s.header}>
-          <Text style={s.appTitle}>MyStudyBody</Text>
+          <Text style={s.appTitle}>{user?.username || 'Profil'}</Text>
           <TouchableOpacity style={s.settingsBtn}>
             <Feather name="settings" size={20} color={MUTED} />
           </TouchableOpacity>
@@ -77,11 +90,11 @@ export default function ProfileScreen() {
         >
           <View style={s.avatarLarge}>
             <LinearGradient colors={GRADIENTS.study as any} style={s.avatarGrad}>
-              <Text style={s.avatarInitials}>A</Text>
+              <Text style={s.avatarInitials}>{avatarInitial}</Text>
             </LinearGradient>
           </View>
-          <Text style={s.profileName}>Alex</Text>
-          <Text style={s.profileRole}>Student · Year 12</Text>
+          <Text style={s.profileName}>{displayName}</Text>
+          <Text style={s.profileRole}>{displayEmail || 'Student'}</Text>
           <View style={s.profileBadge}>
             <Feather name="zap" size={12} color={ORANGE} />
             <Text style={s.profileBadgeText}>7-Day Streak Active</Text>
@@ -145,6 +158,12 @@ export default function ProfileScreen() {
 
         {/* Version */}
         <Text style={s.versionText}>MyStudyBody v1.0.0 · Built with focus in mind</Text>
+
+        {/* Sign Out Button */}
+        <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
+          <Feather name="log-out" size={18} color="#EF4444" />
+          <Text style={s.logoutText}>Çıkış Yap</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -185,5 +204,7 @@ const s = StyleSheet.create({
   settingLabel: { fontSize: 15, fontFamily: F.reg, color: TXT },
 
   // Version
-  versionText: { fontSize: 11, fontFamily: F.reg, color: `${MUTED}80`, textAlign: 'center', marginTop: 4 },
+  versionText: { fontSize: 11, fontFamily: F.reg, color: `${MUTED}80`, textAlign: 'center', marginTop: 4, marginBottom: 16 },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: 'rgba(239,68,68,0.08)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)', borderRadius: 16, paddingVertical: 15, marginBottom: 8 },
+  logoutText: { fontSize: 16, fontFamily: F.bld, color: '#EF4444' },
 });

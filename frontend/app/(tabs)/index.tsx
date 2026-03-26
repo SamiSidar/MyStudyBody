@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { GRADIENTS } from '../../src/constants/colors';
 import { MOCK_WEEKLY_HOURS, MOCK_WEAK_SUBJECTS, DAYS } from '../../src/constants/mockData';
 import { F } from '../../src/constants/fonts';
+import { useAuth } from '../../src/context/AuthContext';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const BAR_MAX_H = 80;
@@ -26,6 +27,7 @@ const PURPLE_START = '#A78BFA';
 const PURPLE_END = '#7C3AED';
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const router = useRouter();
   const [weeklyHours, setWeeklyHours] = useState(MOCK_WEEKLY_HOURS);
   const [weakSubjects, setWeakSubjects] = useState(MOCK_WEAK_SUBJECTS);
@@ -74,7 +76,7 @@ export default function Dashboard() {
             <View style={s.avatar}>
               <Feather name="user" size={17} color={CYAN} />
             </View>
-            <Text style={s.appTitle}>MyStudyBody</Text>
+            <Text style={s.appTitle}>{user?.username || 'MyStudyBody'}</Text>
           </View>
           <View style={s.streakBadge}>
             <Text style={s.streakNum}>7</Text>
@@ -83,7 +85,7 @@ export default function Dashboard() {
         </View>
 
         {/* ── Welcome & Headline ── */}
-        <Text style={s.welcome}>Welcome back, Alex</Text>
+        <Text style={s.welcome}>Welcome back, {user?.username || 'Alex'}</Text>
         <Text style={s.headline}>
           {'Your mind is\nan '}
           <Text style={s.headlineAccent}>architect.</Text>

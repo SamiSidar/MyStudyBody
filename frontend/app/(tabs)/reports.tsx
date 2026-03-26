@@ -18,6 +18,7 @@ export default function ReportsScreen() {
   const s = makeStyles(colors);
   const [period, setPeriod] = useState<Period>('weekly');
   const [errorData, setErrorData] = useState(MOCK_WEEKLY_ERRORS);
+  const [realWeeklyData, setRealWeeklyData] = useState<typeof MOCK_WEEKLY_ERRORS | null>(null);
   const [studyPlan, setStudyPlan] = useState(MOCK_AI_STUDY_PLAN);
 
   const fetchErrors = async () => {
@@ -26,7 +27,9 @@ export default function ReportsScreen() {
       if (res.ok) {
         const data = await res.json();
         if (data.length > 0) {
-          setErrorData(data.map((d: any) => ({ subject: d.subject, errors: d.errors })));
+          const weekly = data.map((d: any) => ({ subject: d.subject, errors: d.errors }));
+          setRealWeeklyData(weekly);
+          if (period === 'weekly') setErrorData(weekly);
           // Build AI study plan from real data
           const plan = data.slice(0, 5).map((d: any, i: number) => ({
             id: String(i),
@@ -44,9 +47,14 @@ export default function ReportsScreen() {
 
   useEffect(() => { fetchErrors(); }, []);
 
+  // Period toggle: use real data for weekly (if available), mock for monthly
   useEffect(() => {
-    setErrorData(period === 'weekly' ? MOCK_WEEKLY_ERRORS : MOCK_MONTHLY_ERRORS);
-  }, [period]);
+    if (period === 'weekly') {
+      setErrorData(realWeeklyData && realWeeklyData.length > 0 ? realWeeklyData : MOCK_WEEKLY_ERRORS);
+    } else {
+      setErrorData(MOCK_MONTHLY_ERRORS);
+    }
+  }, [period, realWeeklyData]);
 
   const maxErrors = Math.max(...errorData.map((d) => d.errors), 1);
   const totalErrors = errorData.reduce((a, b) => a + b.errors, 0);

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   Image, TextInput, Alert, Animated,
-  KeyboardAvoidingView, Platform, Modal, ScrollView,
+  KeyboardAvoidingView, Platform, Modal, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -24,6 +24,7 @@ const TXT = '#EDF2FF';
 const MUTED = '#718096';
 const CYAN = '#4FACFE';
 const ORANGE = '#FF6D00';
+const GREEN = '#10B981';
 
 const PRO_TIPS = [
   'Center the text and avoid shadows for 99% accuracy.',
@@ -37,9 +38,12 @@ export default function ScannerScreen() {
   const [phase, setPhase] = useState<Phase>('viewfinder');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [autoSubject, setAutoSubject] = useState('Math');
-  const [autoTopic, setAutoTopic] = useState('Trigonometry');
+  const [autoTopic, setAutoTopic] = useState('');
+  const [aiInsight, setAiInsight] = useState('');
   const [notes, setNotes] = useState('');
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [classifying, setClassifying] = useState(false);
   const [showSubjectPicker, setShowSubjectPicker] = useState(false);
   const [flashOn, setFlashOn] = useState(false);
   const [tipIndex] = useState(() => Math.floor(Math.random() * PRO_TIPS.length));
@@ -99,31 +103,82 @@ export default function ScannerScreen() {
 
   const processImage = (uri: string) => {
     setCapturedImage(uri);
+    setAutoSubject('Math');
+    setAutoTopic('');
+    setAiInsight('');
+    setNotes('');
     setPhase('analyzing');
     setTimeout(() => {
-      const subjectKeys = Object.keys(MOCK_ERROR_TOPICS);
-      const subject = subjectKeys[Math.floor(Math.random() * subjectKeys.length)];
-      const topics = MOCK_ERROR_TOPICS[subject];
-      const topic = topics[Math.floor(Math.random() * topics.length)];
-      setAutoSubject(subject);
-      setAutoTopic(topic);
       setPhase('form');
-    }, 2800);
+    }, 2000);
+  };
+
+  const classifyWithAI = async () => {
+    if (!notes.trim()) {
+      Alert.alert('Not Gerekli', 'AI sınıflandırma için lütfen hatanızı kısaca açıklayın.');
+      return;
+    }
+    setClassifying(true);
+    try {
+      const res = await apiFetch('/api/ai/classify-error', {
+        method: 'POST',
+        body: JSON.stringify({
+          notes: notes.trim(),
+          subject_hint: autoSubject,
+          topic_hint: autoTopic,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.subject) setAutoSubject(data.subject);
+        if (data.topic) setAutoTopic(data.topic);
+        if (data.insight) setAiInsight(data.insight);
+      }
+    } catch (_) {}
+    setClassifying(false);
   };
 
   const handleSaveError = async () => {
+    setSaving(true);
     try {
+      // If notes provided and topic not yet AI-classified, do a quick classification
+      if (notes.trim() && !aiInsight) {
+        try {
+          const res = await apiFetch('/api/ai/classify-error', {
+            method: 'POST',
+            body: JSON.stringify({
+              notes: notes.trim(),
+              subject_hint: autoSubject,
+              topic_hint: autoTopic,
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.subject) setAutoSubject(data.subject);
+            if (data.topic && !autoTopic) setAutoTopic(data.topic);
+            if (data.insight) setAiInsight(data.insight);
+          }
+        } catch (_) {}
+      }
+
       await apiFetch('/api/errors', {
         method: 'POST',
-        body: JSON.stringify({ subject: autoSubject, topic: autoTopic, notes }),
+        body: JSON.stringify({
+          subject: autoSubject,
+          topic: autoTopic || autoSubject,
+          notes,
+        }),
       });
     } catch (_) {}
+    setSaving(false);
     setSaved(true);
     setTimeout(() => {
       setSaved(false);
       setPhase('viewfinder');
       setCapturedImage(null);
       setNotes('');
+      setAiInsight('');
+      setAutoTopic('');
     }, 1800);
   };
 
@@ -132,6 +187,8 @@ export default function ScannerScreen() {
     setCapturedImage(null);
     setNotes('');
     setSaved(false);
+    setAiInsight('');
+    setAutoTopic('');
   };
 
   const scanLineY = scanAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 210] });
@@ -153,13 +210,13 @@ export default function ScannerScreen() {
             {/* Status */}
             {saved ? (
               <View style={s.savedBanner}>
-                <Feather name="check-circle" size={20} color="#10B981" />
-                <Text style={s.savedText}>Error saved to your log!</Text>
+                <Feather name="check-circle" size={20} color={GREEN} />
+                <Text style={s.savedText}>Hata gunlugune kaydedildi!</Text>
               </View>
             ) : (
               <View style={s.successTag}>
                 <LinearGradient colors={GRADIENTS.study as any} start={{x:0,y:0}} end={{x:1,y:0}} style={s.successDot} />
-                <Text style={s.successTagText}>AI Analysis Complete</Text>
+                <Text style={s.successTagText}>Goruntu islendi</Text>
               </View>
             )}
 
@@ -167,7 +224,45 @@ export default function ScannerScreen() {
               <Image source={{ uri: capturedImage }} style={s.thumbnail} resizeMode="cover" />
             )}
 
-            <Text style={s.fieldLabel}>Subject</Text>
+            {/* Notes first - to enable AI classification */}
+            <Text style={s.fieldLabel}>Hatanizi Aciklayin</Text>
+            <TextInput
+              testID="notes-input"
+              style={s.notesInput}
+              placeholder="Hangi soruyu yanlis yaptiginizi kisaca aciklayin (AI analizi icin)..."
+              placeholderTextColor={MUTED}
+              multiline
+              numberOfLines={4}
+              value={notes}
+              onChangeText={setNotes}
+              textAlignVertical="top"
+            />
+
+            {/* AI Classify Button */}
+            <TouchableOpacity
+              style={[s.aiClassifyBtn, classifying && { opacity: 0.6 }]}
+              onPress={classifyWithAI}
+              disabled={classifying}
+            >
+              {classifying ? (
+                <ActivityIndicator size="small" color={CYAN} />
+              ) : (
+                <Feather name="cpu" size={16} color={CYAN} />
+              )}
+              <Text style={s.aiClassifyText}>
+                {classifying ? 'AI Siniflandiriyor...' : 'AI ile Siniflandir'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* AI Insight */}
+            {!!aiInsight && (
+              <View style={s.insightBox}>
+                <Feather name="zap" size={14} color={CYAN} />
+                <Text style={s.insightText}>{aiInsight}</Text>
+              </View>
+            )}
+
+            <Text style={[s.fieldLabel, { marginTop: 16 }]}>Ders</Text>
             <TouchableOpacity
               testID="auto-fill-subject"
               style={s.autoFillRow}
@@ -179,41 +274,38 @@ export default function ScannerScreen() {
               </View>
             </TouchableOpacity>
 
-            <Text style={s.fieldLabel}>Topic</Text>
-            <View testID="auto-fill-topic" style={s.autoFillRow}>
-              <Text style={s.autoFillText}>{autoTopic}</Text>
+            <Text style={s.fieldLabel}>Konu</Text>
+            <TouchableOpacity
+              testID="auto-fill-topic"
+              style={s.autoFillRow}
+              onPress={() => {/* topic is set by AI */}}
+            >
+              <Text style={[s.autoFillText, !autoTopic && { color: MUTED }]}>
+                {autoTopic || 'AI ile siniflandir...'}
+              </Text>
               <View style={s.aiChip}>
                 <Text style={s.aiChipText}>AI</Text>
               </View>
-            </View>
-
-            <Text style={s.fieldLabel}>Your Notes</Text>
-            <TextInput
-              testID="notes-input"
-              style={s.notesInput}
-              placeholder="What did you get wrong? Key things to remember..."
-              placeholderTextColor={MUTED}
-              multiline
-              numberOfLines={4}
-              value={notes}
-              onChangeText={setNotes}
-              textAlignVertical="top"
-            />
+            </TouchableOpacity>
 
             <TouchableOpacity
               testID="save-error-btn"
-              style={[s.saveBtn, saved && { opacity: 0.5 }]}
+              style={[s.saveBtn, (saved || saving) && { opacity: 0.5 }]}
               onPress={handleSaveError}
-              disabled={saved}
+              disabled={saved || saving}
             >
               <LinearGradient colors={GRADIENTS.study as any} start={{x:0,y:0}} end={{x:1,y:0}} style={s.saveBtnGrad}>
-                <Feather name="save" size={18} color="#fff" />
-                <Text style={s.saveBtnText}>Save to Error Log</Text>
+                {saving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Feather name="save" size={18} color="#fff" />
+                )}
+                <Text style={s.saveBtnText}>{saving ? 'Kaydediliyor...' : 'Hata Gunlugune Kaydet'}</Text>
               </LinearGradient>
             </TouchableOpacity>
 
             <TouchableOpacity testID="scan-another-btn" style={s.scanAnotherBtn} onPress={resetScanner}>
-              <Text style={s.scanAnotherText}>Scan Another</Text>
+              <Text style={s.scanAnotherText}>Baska Tara</Text>
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -222,7 +314,7 @@ export default function ScannerScreen() {
         <Modal visible={showSubjectPicker} transparent animationType="slide">
           <View style={s.modalOverlay}>
             <View style={s.modalSheet}>
-              <Text style={s.modalTitle}>Change Subject</Text>
+              <Text style={s.modalTitle}>Ders Sec</Text>
               {SUBJECTS.map((subj) => (
                 <TouchableOpacity
                   key={subj}
@@ -234,7 +326,7 @@ export default function ScannerScreen() {
                 </TouchableOpacity>
               ))}
               <TouchableOpacity style={s.modalCancel} onPress={() => setShowSubjectPicker(false)}>
-                <Text style={s.modalCancelText}>Cancel</Text>
+                <Text style={s.modalCancelText}>Iptal</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -308,7 +400,7 @@ export default function ScannerScreen() {
           {phase === 'viewfinder' && (
             <View style={s.viewfinderCenter}>
               <Feather name="maximize" size={40} color={`${CYAN}50`} />
-              <Text style={s.viewfinderHint}>Frame your question</Text>
+              <Text style={s.viewfinderHint}>Soruyu cerceve icine alin</Text>
             </View>
           )}
 
@@ -318,7 +410,7 @@ export default function ScannerScreen() {
               <View style={s.analyzingIcon}>
                 <Feather name="cpu" size={26} color={CYAN} />
               </View>
-              <Text style={s.analyzingText}>Processing question...</Text>
+              <Text style={s.analyzingText}>Goruntu isleniyor...</Text>
             </View>
           )}
         </View>
@@ -326,7 +418,7 @@ export default function ScannerScreen() {
         {/* AI Status Bar */}
         <View style={[s.statusBar, phase !== 'analyzing' && s.statusBarHidden]}>
           <Animated.View style={[s.statusDot, { opacity: dotAnim }]} />
-          <Text style={s.statusText}>AI ANALYZING QUESTION...</Text>
+          <Text style={s.statusText}>GORUNTU ISLENIYOR...</Text>
         </View>
 
         {/* Bottom Controls */}
@@ -426,14 +518,23 @@ const s = StyleSheet.create({
   successDot: { width: 10, height: 10, borderRadius: 5 },
   successTagText: { fontFamily: F.sem, fontSize: 14, color: '#10B981' },
   savedBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(16,185,129,0.12)', borderRadius: 12, padding: 14, marginBottom: 14 },
-  savedText: { fontFamily: F.bld, fontSize: 15, color: '#10B981' },
+  savedText: { fontFamily: F.bld, fontSize: 15, color: GREEN },
   thumbnail: { width: '100%', height: 130, borderRadius: 14, marginBottom: 18 },
   fieldLabel: { fontSize: 11, fontFamily: F.bld, color: MUTED, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1.0 },
   autoFillRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: SURFACE, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 16 },
   autoFillText: { fontSize: 16, fontFamily: F.sem, color: TXT },
   aiChip: { backgroundColor: `${CYAN}22`, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   aiChipText: { fontSize: 10, fontFamily: F.xbld, color: CYAN },
-  notesInput: { backgroundColor: SURFACE, borderRadius: 12, padding: 14, fontSize: 15, fontFamily: F.reg, color: TXT, minHeight: 100, marginBottom: 20 },
+
+  // AI Classify
+  aiClassifyBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: `${CYAN}15`, borderRadius: 12, paddingVertical: 12, marginBottom: 12, borderWidth: 1, borderColor: `${CYAN}30` },
+  aiClassifyText: { fontSize: 14, fontFamily: F.bld, color: CYAN },
+
+  // AI Insight
+  insightBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: `${CYAN}10`, borderRadius: 10, padding: 12, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: CYAN },
+  insightText: { flex: 1, fontSize: 13, fontFamily: F.reg, color: TXT, lineHeight: 18 },
+
+  notesInput: { backgroundColor: SURFACE, borderRadius: 12, padding: 14, fontSize: 15, fontFamily: F.reg, color: TXT, minHeight: 100, marginBottom: 12 },
   saveBtn: { borderRadius: 14, overflow: 'hidden', marginBottom: 12 },
   saveBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16 },
   saveBtnText: { fontSize: 16, fontFamily: F.bld, color: '#fff' },

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -24,6 +24,7 @@ const MUTED = '#718096';
 const CYAN = '#4FACFE';
 const ORANGE = '#FF6D00';
 const GREEN = '#10B981';
+const PURPLE = '#A78BFA';
 
 const PLAN_ICONS = [
   { icon: 'triangle', color: '#4FACFE', bg: 'rgba(79,172,254,0.18)' },
@@ -34,12 +35,22 @@ const PLAN_ICONS = [
   { icon: 'clock', color: '#F59E0B', bg: 'rgba(245,158,11,0.18)' },
 ];
 
+interface AIReport {
+  weak_subjects: Array<{subject: string; topic: string; error_count: number; study_minutes: number; priority: string; reason: string}>;
+  recommendations: Array<{subject: string; topic: string; task: string; reason: string; priority: string}>;
+  topic_breakdown: Array<{subject: string; topic: string; error_count: number}>;
+  insights: string[];
+}
+
 export default function ReportsScreen() {
   const { user } = useAuth();
   const [period, setPeriod] = useState<Period>('weekly');
   const [errorData, setErrorData] = useState(MOCK_WEEKLY_ERRORS);
   const [realWeeklyData, setRealWeeklyData] = useState<typeof MOCK_WEEKLY_ERRORS | null>(null);
   const [studyPlan, setStudyPlan] = useState(MOCK_AI_STUDY_PLAN);
+  const [aiReport, setAiReport] = useState<AIReport | null>(null);
+  const [loadingAI, setLoadingAI] = useState(false);
+  const [totalStudyHours, setTotalStudyHours] = useState(0);
 
   const fetchErrors = async () => {
     try {
@@ -53,8 +64,8 @@ export default function ReportsScreen() {
           const plan = data.slice(0, 5).map((d: any, i: number) => ({
             id: String(i),
             subject: d.subject,
-            task: `Review ${d.topics?.[0] || d.subject}`,
-            detail: `${d.errors} error${d.errors !== 1 ? 's' : ''} logged`,
+            task: `${d.topics?.[0] || d.subject} konusunu gozden gecir`,
+            detail: `${d.errors} hata kaydedildi`,
             priority: d.errors >= 5 ? 'high' : d.errors >= 3 ? 'medium' : 'low',
             color: d.errors >= 5 ? '#EF4444' : d.errors >= 3 ? ORANGE : GREEN,
           }));
@@ -64,7 +75,44 @@ export default function ReportsScreen() {
     } catch (_) {}
   };
 
-  useEffect(() => { fetchErrors(); }, []);
+  const fetchWeeklyHours = async () => {
+    try {
+      const res = await apiFetch('/api/stats/weekly');
+      if (res.ok) {
+        const data = await res.json();
+        setTotalStudyHours(data.total_hours || 0);
+      }
+    } catch (_) {}
+  };
+
+  const generateAIReport = useCallback(async () => {
+    setLoadingAI(true);
+    try {
+      const res = await apiFetch('/api/ai/study-report');
+      if (res.ok) {
+        const data = await res.json();
+        setAiReport(data);
+        // Update study plan from AI recommendations if available
+        if (data.recommendations && data.recommendations.length > 0) {
+          const aiPlan = data.recommendations.map((r: any, i: number) => ({
+            id: String(i),
+            subject: r.subject,
+            task: r.task,
+            detail: r.reason,
+            priority: r.priority,
+            color: r.priority === 'high' ? '#EF4444' : r.priority === 'medium' ? ORANGE : GREEN,
+          }));
+          setStudyPlan(aiPlan);
+        }
+      }
+    } catch (_) {}
+    setLoadingAI(false);
+  }, []);
+
+  useEffect(() => {
+    fetchErrors();
+    fetchWeeklyHours();
+  }, []);
 
   useEffect(() => {
     if (period === 'weekly') {
@@ -76,6 +124,8 @@ export default function ReportsScreen() {
 
   const maxErrors = Math.max(...errorData.map((d) => d.errors), 1);
   const totalErrors = errorData.reduce((a, b) => a + b.errors, 0);
+
+  const priorityColor = (p: string) => p === 'high' ? '#EF4444' : p === 'medium' ? ORANGE : GREEN;
 
   return (
     <SafeAreaView testID="reports-screen" style={s.safe} edges={['top']}>
@@ -96,15 +146,38 @@ export default function ReportsScreen() {
         </View>
 
         {/* Title */}
-        <Text style={s.title}>AI Reports</Text>
-        <Text style={s.subtitle}>Weekly performance analytics & growth insights</Text>
+        <Text style={s.title}>AI Raporlari</Text>
+        <Text style={s.subtitle}>Kisisellestirilmis performans analizi ve gelisme onerileri</Text>
+
+        {/* AI Report Generator Button */}
+        <TouchableOpacity
+          style={[s.aiReportBtn, loadingAI && { opacity: 0.7 }]}
+          onPress={generateAIReport}
+          disabled={loadingAI}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={GRADIENTS.study as any}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={s.aiReportBtnGrad}
+          >
+            {loadingAI ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Feather name="cpu" size={18} color="#fff" />
+            )}
+            <Text style={s.aiReportBtnText}>
+              {loadingAI ? 'AI Analiz Yapiliyor...' : 'AI Raporu Olustur'}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
 
         {/* Errors by Subject Card */}
         <View testID="error-chart" style={s.card}>
           <View style={s.cardHeader}>
             <View>
-              <Text style={s.cardTitle}>Errors by Subject</Text>
-              <Text style={s.cardSubtitle}>Focus areas identified this week</Text>
+              <Text style={s.cardTitle}>Derse Gore Hatalar</Text>
+              <Text style={s.cardSubtitle}>Bu haftaki odak alanlari</Text>
             </View>
             <View style={s.periodToggle}>
               {(['weekly', 'monthly'] as Period[]).map((p) => (
@@ -115,7 +188,7 @@ export default function ReportsScreen() {
                   onPress={() => setPeriod(p)}
                 >
                   <Text style={[s.periodBtnText, period === p && s.periodBtnTextActive]}>
-                    {p === 'weekly' ? '7 Days' : '30 Days'}
+                    {p === 'weekly' ? '7 Gun' : '30 Gun'}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -142,27 +215,100 @@ export default function ReportsScreen() {
           </View>
         </View>
 
-        {/* Precision Rate */}
+        {/* Topic Breakdown (AI-powered) */}
+        {aiReport && aiReport.topic_breakdown && aiReport.topic_breakdown.length > 0 && (
+          <View style={s.card}>
+            <View style={s.cardHeader}>
+              <View>
+                <Text style={s.cardTitle}>Konuya Gore Hata Dagilimi</Text>
+                <Text style={s.cardSubtitle}>AI analizi ile en cok hata yapilan konular</Text>
+              </View>
+              <View style={s.aiTagSmall}>
+                <Feather name="cpu" size={10} color={CYAN} />
+                <Text style={s.aiTagSmallText}>AI</Text>
+              </View>
+            </View>
+            {aiReport.topic_breakdown.slice(0, 8).map((item, i) => (
+              <View key={i} style={s.topicRow}>
+                <View style={s.topicDot}>
+                  <View style={[s.topicDotInner, { backgroundColor: SUBJECT_COLORS[i % SUBJECT_COLORS.length] }]} />
+                </View>
+                <View style={s.topicContent}>
+                  <Text style={s.topicSubject}>{item.subject}</Text>
+                  <Text style={s.topicName}>{item.topic}</Text>
+                </View>
+                <View style={s.topicBadge}>
+                  <Text style={s.topicCount}>{item.error_count}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Weak Subjects (AI-powered) */}
+        {aiReport && aiReport.weak_subjects && aiReport.weak_subjects.length > 0 && (
+          <View style={s.card}>
+            <View style={[s.cardHeader, { marginBottom: 14 }]}>
+              <View>
+                <Text style={s.cardTitle}>En Zayif Konular</Text>
+                <Text style={s.cardSubtitle}>Hata yogunlugu ve calisma suresi analizi</Text>
+              </View>
+              <View style={s.aiTagSmall}>
+                <Feather name="cpu" size={10} color={CYAN} />
+                <Text style={s.aiTagSmallText}>AI</Text>
+              </View>
+            </View>
+            {aiReport.weak_subjects.slice(0, 5).map((item, i) => (
+              <View key={i} style={s.weakItem}>
+                <View style={[s.weakPriorityBar, { backgroundColor: priorityColor(item.priority) }]} />
+                <View style={s.weakContent}>
+                  <View style={s.weakHeader}>
+                    <Text style={s.weakSubject}>{item.subject}</Text>
+                    <View style={[s.priorityChip, { backgroundColor: `${priorityColor(item.priority)}20` }]}>
+                      <Text style={[s.priorityChipText, { color: priorityColor(item.priority) }]}>
+                        {item.priority === 'high' ? 'YUKSEK' : item.priority === 'medium' ? 'ORTA' : 'DUSUK'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={s.weakTopic}>{item.topic}</Text>
+                  <Text style={s.weakReason}>{item.reason}</Text>
+                  <View style={s.weakStats}>
+                    <View style={s.weakStat}>
+                      <Feather name="alert-circle" size={11} color={MUTED} />
+                      <Text style={s.weakStatText}>{item.error_count} hata</Text>
+                    </View>
+                    {item.study_minutes > 0 && (
+                      <View style={s.weakStat}>
+                        <Feather name="clock" size={11} color={MUTED} />
+                        <Text style={s.weakStatText}>{Math.round(item.study_minutes / 60 * 10) / 10}s</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Metric Cards */}
         <View style={s.metricCard}>
           <View style={s.metricIcon}>
             <Feather name="crosshair" size={20} color={CYAN} />
           </View>
           <View style={s.metricContent}>
-            <Text style={s.metricLabel}>PRECISION RATE</Text>
-            <Text style={s.metricValue}>92.4%</Text>
+            <Text style={s.metricLabel}>TOPLAM HATA</Text>
+            <Text style={s.metricValue}>{totalErrors}</Text>
           </View>
           <View style={[s.metricLine, { backgroundColor: CYAN }]} />
         </View>
 
-        {/* Deep Focus */}
         <View style={s.metricCard}>
           <View style={[s.metricIcon, { backgroundColor: `${ORANGE}18` }]}>
             <Feather name="sun" size={20} color={ORANGE} />
           </View>
           <View style={s.metricContent}>
-            <Text style={s.metricLabel}>DEEP FOCUS</Text>
-            <Text style={[s.metricValue, { color: TXT }]}>{(parseFloat(weeklyTotal()) + 0).toFixed(1)}h</Text>
-            <Text style={s.metricDelta}>+2.4h vs last week</Text>
+            <Text style={s.metricLabel}>HAFTALIK CALISMA</Text>
+            <Text style={[s.metricValue, { color: TXT }]}>{totalStudyHours > 0 ? totalStudyHours.toFixed(1) : '0.0'}s</Text>
           </View>
           <View style={[s.metricLine, { backgroundColor: ORANGE }]} />
         </View>
@@ -173,7 +319,10 @@ export default function ReportsScreen() {
             <View style={[s.planHeaderIcon, { backgroundColor: `${CYAN}20` }]}>
               <Feather name="cpu" size={18} color={CYAN} />
             </View>
-            <Text style={s.planTitle}>AI Recommended Study Plan</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.planTitle}>AI Calisma Plani</Text>
+              {!aiReport && <Text style={s.planSubtitle}>Rapor olusturmak icin butona basin</Text>}
+            </View>
           </View>
 
           {studyPlan.map((item, idx) => (
@@ -193,7 +342,7 @@ export default function ReportsScreen() {
               {idx === studyPlan.length - 1 ? (
                 <TouchableOpacity style={s.startBtn}>
                   <LinearGradient colors={GRADIENTS.study as any} start={{x:0,y:0}} end={{x:1,y:0}} style={s.startBtnGrad}>
-                    <Text style={s.startBtnText}>START</Text>
+                    <Text style={s.startBtnText}>BASLAT</Text>
                   </LinearGradient>
                 </TouchableOpacity>
               ) : (
@@ -203,36 +352,48 @@ export default function ReportsScreen() {
           ))}
         </View>
 
-        {/* Insight Cards */}
-        <View style={s.insightCard}>
-          <Text style={[s.insightTitle, { color: CYAN }]}>Subject Insight</Text>
-          <Text style={s.insightBody}>
-            Your accuracy in {errorData[0]?.subject || 'Mathematics'} has decreased 4% this week. Most errors occurring in common concept areas.
-          </Text>
-        </View>
+        {/* AI Insights */}
+        {aiReport && aiReport.insights && aiReport.insights.length > 0 ? (
+          <>
+            {aiReport.insights.map((insight, i) => (
+              <View key={i} style={[s.insightCard, { borderLeftColor: i === 0 ? CYAN : i === 1 ? ORANGE : PURPLE }]}>
+                <View style={s.insightHeader}>
+                  <Feather name={i === 0 ? 'trending-up' : i === 1 ? 'clock' : 'star'} size={14} color={i === 0 ? CYAN : i === 1 ? ORANGE : PURPLE} />
+                  <Text style={[s.insightTitle, { color: i === 0 ? CYAN : i === 1 ? ORANGE : PURPLE }]}>
+                    {i === 0 ? 'Performans Analizi' : i === 1 ? 'Zaman Analizi' : 'Hedef Tavsiyesi'}
+                  </Text>
+                </View>
+                <Text style={s.insightBody}>{insight}</Text>
+              </View>
+            ))}
+          </>
+        ) : (
+          <>
+            <View style={s.insightCard}>
+              <View style={s.insightHeader}>
+                <Feather name="trending-up" size={14} color={CYAN} />
+                <Text style={[s.insightTitle, { color: CYAN }]}>Konu Analizi</Text>
+              </View>
+              <Text style={s.insightBody}>
+                {errorData[0]?.subject || 'Matematik'} dersinde bu hafta en yuksek hata orani gozlemlendi. AI raporu olusturarak kisisellestirilmis analiz alin.
+              </Text>
+            </View>
 
-        <View style={s.insightCard}>
-          <Text style={[s.insightTitle, { color: ORANGE }]}>Time Distribution</Text>
-          <Text style={s.insightBody}>
-            Evening sessions (7pm – 10pm) show 15% higher session retention rates compared to early morning study blocks.
-          </Text>
-        </View>
-
-        <View style={[s.insightCard, { marginBottom: 8 }]}>
-          <Text style={[s.insightTitle, { color: '#F59E0B' }]}>Next Milestone</Text>
-          <Text style={s.insightBody}>
-            You are 12 study hours away from the Deep Diver badge. Keep up the consistent focus periods!
-          </Text>
-        </View>
+            <View style={[s.insightCard, { marginBottom: 8 }]}>
+              <View style={s.insightHeader}>
+                <Feather name="clock" size={14} color={ORANGE} />
+                <Text style={[s.insightTitle, { color: ORANGE }]}>Calisma Suresi</Text>
+              </View>
+              <Text style={s.insightBody}>
+                Yukarida bulunan "AI Raporu Olustur" butonuna basarak calisma surelerinizi ve hatalarinizi analiz eden kisisel bir plan alin.
+              </Text>
+            </View>
+          </>
+        )}
 
       </ScrollView>
     </SafeAreaView>
   );
-}
-
-function weeklyTotal() {
-  const MOCK_WEEKLY_HOURS = [1.5, 2.5, 3.0, 2.0, 4.0, 1.0, 3.5];
-  return MOCK_WEEKLY_HOURS.reduce((a, b) => a + b, 0).toFixed(1);
 }
 
 const s = StyleSheet.create({

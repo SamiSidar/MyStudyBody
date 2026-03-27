@@ -4,12 +4,14 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import json
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 from passlib.context import CryptContext
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -17,6 +19,8 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -176,6 +180,230 @@ async def get_error_stats(x_user_id: Optional[str] = Header(default=None)):
         if d["topic"] not in stats[subj]["topics"]:
             stats[subj]["topics"].append(d["topic"])
     return sorted(stats.values(), key=lambda x: x["errors"], reverse=True)
+
+
+# ── AI Endpoints ──────────────────────────────────────────────────────
+
+class ClassifyErrorRequest(BaseModel):
+    notes: str
+    subject_hint: str = ""
+    topic_hint: str = ""
+
+
+def parse_json_response(response: str) -> dict:
+    """Safely parse JSON from LLM response, handling markdown code blocks."""
+    clean = response.strip()
+    if "```" in clean:
+        parts = clean.split("```")
+        for part in parts:
+            part = part.strip()
+            if part.startswith("json"):
+                part = part[4:].strip()
+            try:
+                return json.loads(part)
+            except Exception:
+                continue
+    return json.loads(clean)
+
+
+@api_router.post("/ai/classify-error")
+async def ai_classify_error(body: ClassifyErrorRequest):
+    """Use Gemini to classify an error into subject and topic based on user notes."""
+    if not EMERGENT_LLM_KEY:
+        return {"subject": body.subject_hint or "Math", "topic": body.topic_hint or "General", "insight": "AI servisi yapılandırılmamış."}
+
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=str(uuid.uuid4()),
+            system_message=(
+                "You are a study assistant for Turkish high school students. "
+                "Classify academic errors into subjects and topics. "
+                "Return valid JSON only, no extra text or markdown."
+            )
+        ).with_model("gemini", "gemini-2.5-flash")
+
+        available_subjects = ["Math", "Physics", "Chemistry", "Biology", "History", "Geography", "Turkish", "English", "Philosophy"]
+        subject_hint_text = f"Current subject hint: {body.subject_hint}" if body.subject_hint else ""
+        topic_hint_text = f"Current topic hint: {body.topic_hint}" if body.topic_hint else ""
+
+        prompt = f"""A student made an error. Based on their notes, classify the error.
+
+Student notes: "{body.notes}"
+{subject_hint_text}
+{topic_hint_text}
+
+Available subjects: {', '.join(available_subjects)}
+
+Return ONLY this JSON:
+{{
+  "subject": "subject name from the available list",
+  "topic": "specific academic topic within that subject",
+  "insight": "one sentence in Turkish about this type of error and how to avoid it"
+}}"""
+
+        msg = UserMessage(text=prompt)
+        response = await chat.send_message(msg)
+        result = parse_json_response(response)
+        # Validate subject is from allowed list
+        if result.get("subject") not in available_subjects:
+            result["subject"] = body.subject_hint or "Math"
+        return result
+    except Exception as e:
+        logger.error(f"AI classify error: {e}")
+        return {
+            "subject": body.subject_hint or "Math",
+            "topic": body.topic_hint or "General",
+            "insight": "Hata sınıflandırılamadı, lütfen manuel olarak seçin."
+        }
+
+
+@api_router.get("/ai/study-report")
+async def ai_study_report(x_user_id: Optional[str] = Header(default=None)):
+    """Generate a personalized AI study report based on user's errors and sessions."""
+    uid = require_user(x_user_id)
+
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=500, detail="AI servisi yapılandırılmamış.")
+
+    # Fetch data
+    errors = await db.error_scans.find({"user_id": uid}, {"_id": 0}).to_list(1000)
+    sessions = await db.study_sessions.find({"user_id": uid}, {"_id": 0}).to_list(1000)
+
+    if not errors and not sessions:
+        return {
+            "weak_subjects": [],
+            "recommendations": [],
+            "insights": ["Henüz yeterli veri yok. Hata kaydetmeye ve çalışma oturumları oluşturmaya başlayın."],
+            "topic_breakdown": []
+        }
+
+    # Aggregate error data by subject → topic
+    error_agg: Dict[str, Any] = {}
+    for err in errors:
+        subj = err.get("subject", "Unknown")
+        topic = err.get("topic", "Unknown")
+        if subj not in error_agg:
+            error_agg[subj] = {"total": 0, "topics": {}}
+        error_agg[subj]["total"] += 1
+        error_agg[subj]["topics"][topic] = error_agg[subj]["topics"].get(topic, 0) + 1
+
+    # Aggregate session data
+    session_agg: Dict[str, int] = {}
+    for sess in sessions:
+        subj = sess.get("subject", "Unknown")
+        session_agg[subj] = session_agg.get(subj, 0) + sess.get("duration_minutes", 0)
+
+    # Build summary
+    error_summary = []
+    for subj, data in sorted(error_agg.items(), key=lambda x: -x[1]["total"]):
+        topic_list = sorted(data["topics"].items(), key=lambda x: -x[1])
+        error_summary.append({
+            "subject": subj,
+            "total_errors": data["total"],
+            "topics": [{"topic": t, "count": c} for t, c in topic_list],
+            "study_minutes": session_agg.get(subj, 0)
+        })
+
+    session_summary = [
+        {"subject": s, "total_minutes": m, "total_hours": round(m / 60, 1)}
+        for s, m in sorted(session_agg.items(), key=lambda x: -x[1])
+    ]
+
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=str(uuid.uuid4()),
+            system_message=(
+                "You are a study advisor for a Turkish high school student. "
+                "Analyze error patterns and study time to create personalized recommendations. "
+                "Always respond in Turkish. Return valid JSON only."
+            )
+        ).with_model("gemini", "gemini-2.5-flash")
+
+        prompt = f"""Bir Türk lise öğrencisinin çalışma verileri:
+
+HATA ANALİZİ (ders > konu > hata sayısı):
+{json.dumps(error_summary, ensure_ascii=False)}
+
+ÇALIŞMA SÜRELERİ:
+{json.dumps(session_summary, ensure_ascii=False)}
+
+Bu verilere dayanarak kapsamlı bir analiz yap. Şunları göz önünde bulundur:
+- Hangi ders ve konularda en çok hata yapılıyor?
+- Çalışılan süre ile yapılan hata oranı nasıl?
+- Çalışma süresi az ama hata çok olan konular öncelikli
+
+Yanıtı YALNIZCA şu JSON formatında ver:
+{{
+  "weak_subjects": [
+    {{
+      "subject": "ders adı",
+      "topic": "en çok hata yapılan konu",
+      "error_count": hata_sayısı,
+      "study_minutes": çalışma_dakikası,
+      "priority": "high veya medium veya low",
+      "reason": "kısa Türkçe açıklama"
+    }}
+  ],
+  "recommendations": [
+    {{
+      "subject": "ders adı",
+      "topic": "konu adı",
+      "task": "yapılacak görev (Türkçe)",
+      "reason": "neden bu öncelikli (Türkçe)",
+      "priority": "high veya medium veya low"
+    }}
+  ],
+  "topic_breakdown": [
+    {{
+      "subject": "ders",
+      "topic": "konu",
+      "error_count": sayı
+    }}
+  ],
+  "insights": ["İçgörü 1 (Türkçe)", "İçgörü 2 (Türkçe)", "İçgörü 3 (Türkçe)"]
+}}"""
+
+        msg = UserMessage(text=prompt)
+        response = await chat.send_message(msg)
+        result = parse_json_response(response)
+        return result
+
+    except Exception as e:
+        logger.error(f"AI study report error: {e}")
+        # Fallback from raw data
+        weak = sorted(error_agg.items(), key=lambda x: -x[1]["total"])
+        recs = []
+        for subj, data in weak[:4]:
+            top_topic = max(data["topics"].items(), key=lambda x: x[1])[0] if data["topics"] else subj
+            recs.append({
+                "subject": subj,
+                "topic": top_topic,
+                "task": f"{top_topic} konusunu tekrar et",
+                "reason": f"{data['total']} hata yapıldı",
+                "priority": "high" if data["total"] >= 5 else "medium"
+            })
+        topic_bd = []
+        for subj, data in weak:
+            for t, c in data["topics"].items():
+                topic_bd.append({"subject": subj, "topic": t, "error_count": c})
+        return {
+            "weak_subjects": [
+                {
+                    "subject": s,
+                    "topic": list(d["topics"].keys())[0] if d["topics"] else s,
+                    "error_count": d["total"],
+                    "study_minutes": session_agg.get(s, 0),
+                    "priority": "high" if d["total"] >= 5 else "medium",
+                    "reason": f"{d['total']} hata kaydedildi"
+                }
+                for s, d in weak[:5]
+            ],
+            "recommendations": recs,
+            "topic_breakdown": topic_bd,
+            "insights": ["Verileriniz analiz edildi. Hata oranı yüksek konulara öncelik verin."]
+        }
 
 
 app.include_router(api_router)

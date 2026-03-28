@@ -190,6 +190,10 @@ class ClassifyErrorRequest(BaseModel):
     topic_hint: str = ""
 
 
+class AnalyzeImageRequest(BaseModel):
+    image_base64: str  # Pure base64, no data URL prefix
+
+
 def parse_json_response(response: str) -> dict:
     """Safely parse JSON from LLM response, handling markdown code blocks."""
     clean = response.strip()
@@ -204,6 +208,79 @@ def parse_json_response(response: str) -> dict:
             except Exception:
                 continue
     return json.loads(clean)
+
+
+@api_router.post("/ai/analyze-image")
+async def ai_analyze_image(body: AnalyzeImageRequest):
+    """
+    Use Gemini Vision to read a question photo and auto-classify it.
+    Returns subject, topic, question_summary, and a Turkish insight.
+    """
+    if not EMERGENT_LLM_KEY:
+        return {
+            "subject": "Math",
+            "topic": "Genel",
+            "question_summary": "Goruntu analiz edilemedi.",
+            "insight": "AI servisi yapılandırılmamış."
+        }
+
+    try:
+        from emergentintegrations.llm.chat import ImageContent
+
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=str(uuid.uuid4()),
+            system_message=(
+                "Sen Türk lise öğrencilerine yardım eden bir yapay zeka asistanısın. "
+                "Öğrencinin yanlış yaptığı sorunun fotoğrafını analiz edip derse ve konuya göre sınıflandır. "
+                "Yalnızca geçerli JSON döndür, başka hiçbir şey yazma."
+            )
+        ).with_model("gemini", "gemini-2.5-flash")
+
+        available_subjects = [
+            "Math", "Physics", "Chemistry", "Biology",
+            "History", "Geography", "Turkish", "English", "Philosophy"
+        ]
+
+        prompt = f"""Bu fotoğrafta bir öğrencinin yanlış yaptığı bir sınav sorusu var.
+
+Fotoğraftaki soruyu dikkatlice incele:
+1. Hangi derse ait olduğunu belirle
+2. Sorunun hangi konudan geldiğini belirle
+3. Soruyu kısaca özetle (maksimum 1 cümle)
+4. Bu tür sorularda sık yapılan hatayı Türkçe açıkla
+
+Kullanılabilir dersler: {', '.join(available_subjects)}
+
+YALNIZCA şu JSON formatında yanıt ver:
+{{
+  "subject": "dersin adı (yukarıdaki listeden)",
+  "topic": "sorunun konusu (örn: Türevler, Kuvvet-İvme, Osmanlı Tarihi)",
+  "question_summary": "soruyu 1 cümlede özetle",
+  "insight": "bu konuda dikkat edilmesi gereken nokta (Türkçe, 1-2 cümle)"
+}}"""
+
+        msg = UserMessage(
+            text=prompt,
+            file_contents=[ImageContent(image_base64=body.image_base64)]
+        )
+        response = await chat.send_message(msg)
+        result = parse_json_response(response)
+
+        # Validate subject
+        if result.get("subject") not in available_subjects:
+            result["subject"] = "Math"
+
+        return result
+
+    except Exception as e:
+        logger.error(f"AI analyze image error: {e}")
+        return {
+            "subject": "Math",
+            "topic": "Genel",
+            "question_summary": "Soru analiz edilemedi.",
+            "insight": "Fotoğraf işlenemedi, lütfen notlarınızı manuel olarak girin."
+        }
 
 
 @api_router.post("/ai/classify-error")

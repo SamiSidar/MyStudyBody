@@ -66,6 +66,9 @@ class ErrorScan(BaseModel):
     subject: str
     topic: str
     notes: str = ""
+    image_base64: str = ""
+    question_summary: str = ""
+    ai_insight: str = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -73,6 +76,18 @@ class ErrorScanCreate(BaseModel):
     subject: str
     topic: str
     notes: str = ""
+    image_base64: str = ""
+    question_summary: str = ""
+    ai_insight: str = ""
+
+
+class ExamQuestionResult(BaseModel):
+    question_id: str
+    understood: bool
+
+
+class ExamResultsCreate(BaseModel):
+    results: List[ExamQuestionResult]
 
 
 @api_router.post("/auth/register", response_model=UserResponse)
@@ -155,7 +170,8 @@ async def get_weekly_stats(x_user_id: Optional[str] = Header(default=None)):
 async def create_error(body: ErrorScanCreate, x_user_id: Optional[str] = Header(default=None)):
     uid = require_user(x_user_id)
     err = ErrorScan(user_id=uid, **body.dict())
-    await db.error_scans.insert_one(err.dict())
+    doc = err.dict()
+    await db.error_scans.insert_one(doc)
     return err
 
 
@@ -180,6 +196,58 @@ async def get_error_stats(x_user_id: Optional[str] = Header(default=None)):
         if d["topic"] not in stats[subj]["topics"]:
             stats[subj]["topics"].append(d["topic"])
     return sorted(stats.values(), key=lambda x: x["errors"], reverse=True)
+
+
+# ── Exam Endpoints ────────────────────────────────────────────────────
+
+@api_router.get("/exam/questions")
+async def get_exam_questions(
+    time_filter: str = "month",
+    subject: str = "all",
+    x_user_id: Optional[str] = Header(default=None)
+):
+    """Return questions filtered by time range and subject for practice exam."""
+    uid = require_user(x_user_id)
+    query: Dict[str, Any] = {"user_id": uid}
+
+    now = datetime.now(timezone.utc)
+    if time_filter == "week":
+        cutoff = now - timedelta(days=7)
+    elif time_filter == "month":
+        cutoff = now - timedelta(days=30)
+    elif time_filter == "year":
+        cutoff = now - timedelta(days=365)
+    else:
+        cutoff = None
+
+    if cutoff:
+        query["created_at"] = {"$gte": cutoff}
+    if subject != "all":
+        query["subject"] = subject
+
+    docs = await db.error_scans.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Shuffle for variety
+    import random
+    random.shuffle(docs)
+    return docs
+
+
+@api_router.post("/exam/results")
+async def save_exam_results(body: ExamResultsCreate, x_user_id: Optional[str] = Header(default=None)):
+    """Save per-question understood/hard results for a completed exam."""
+    uid = require_user(x_user_id)
+    reviewed_at = datetime.now(timezone.utc)
+    for r in body.results:
+        await db.error_scans.update_one(
+            {"id": r.question_id, "user_id": uid},
+            {"$set": {
+                "last_review": {
+                    "understood": r.understood,
+                    "reviewed_at": reviewed_at
+                }
+            }}
+        )
+    return {"success": True, "count": len(body.results)}
 
 
 # ── AI Endpoints ──────────────────────────────────────────────────────

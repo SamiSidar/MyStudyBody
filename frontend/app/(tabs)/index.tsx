@@ -136,7 +136,7 @@ export default function Dashboard() {
               </View>
             </View>
           ))}
-          <TouchableOpacity style={s.examBtnWrap} activeOpacity={0.85}>
+          <TouchableOpacity style={s.examBtnWrap} activeOpacity={0.85} onPress={() => router.push('/exam')}>
             <LinearGradient
               colors={[PURPLE_START, PURPLE_END]}
               start={{ x: 0, y: 0 }}

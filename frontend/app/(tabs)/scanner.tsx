@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SUBJECTS } from '../../src/constants/mockData';
 import { GRADIENTS } from '../../src/constants/colors';
@@ -175,12 +176,30 @@ export default function ScannerScreen() {
   const handleSaveError = async () => {
     setSaving(true);
     try {
+      // Read image as base64 for storage (compressed)
+      let storedBase64 = '';
+      if (capturedImage) {
+        try {
+          const manipulated = await ImageManipulator.manipulateAsync(
+            capturedImage,
+            [{ resize: { width: 800 } }],
+            { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG }
+          );
+          storedBase64 = await FileSystem.readAsStringAsync(manipulated.uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        } catch (_) {}
+      }
+
       await apiFetch('/api/errors', {
         method: 'POST',
         body: JSON.stringify({
           subject: autoSubject || 'Math',
           topic: autoTopic || autoSubject || 'Genel',
           notes: notes.trim() || questionSummary,
+          image_base64: storedBase64,
+          question_summary: questionSummary,
+          ai_insight: aiInsight,
         }),
       });
     } catch (_) {}

@@ -124,39 +124,51 @@ export default function ScannerScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images' as any,
       allowsEditing: true,
-      quality: 0.7,
+      quality: 0.5,
+      base64: true,       // ← picker'dan direkt base64 al
     });
-    if (!result.canceled && result.assets[0]) processImage(result.assets[0].uri);
+    if (!result.canceled && result.assets[0]) {
+      processImage(result.assets[0].uri, result.assets[0].base64 || '');
+    }
   };
 
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') { Alert.alert('Izin Gerekli', 'Kamera erisim izni verin.'); return; }
-    const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.7 });
-    if (!result.canceled && result.assets[0]) processImage(result.assets[0].uri);
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.5,
+      base64: true,       // ← picker'dan direkt base64 al
+    });
+    if (!result.canceled && result.assets[0]) {
+      processImage(result.assets[0].uri, result.assets[0].base64 || '');
+    }
   };
 
-  const processImage = async (uri: string) => {
+  const processImage = async (uri: string, pickerBase64: string) => {
     setCapturedImage(uri);
     setAutoSubject('');
     setAutoTopic('');
     setAiInsight('');
     setQuestionSummary('');
     setNotes('');
-    setCapturedBase64('');
+    setCapturedBase64(pickerBase64);   // ← picker'dan gelen base64'ü sakla
     setPhase('analyzing');
 
     try {
-      // Read base64 once — reuse for both Gemini analysis AND storage
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      setCapturedBase64(base64); // store for save
+      // base64 yoksa FileSystem'dan okumayı dene (fallback)
+      let base64ToSend = pickerBase64;
+      if (!base64ToSend) {
+        base64ToSend = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        setCapturedBase64(base64ToSend);
+      }
 
-      // Send to Gemini Vision
+      // Gemini Vision'a gönder
       const res = await apiFetch('/api/ai/analyze-image', {
         method: 'POST',
-        body: JSON.stringify({ image_base64: base64 }),
+        body: JSON.stringify({ image_base64: base64ToSend }),
       });
 
       if (res.ok) {

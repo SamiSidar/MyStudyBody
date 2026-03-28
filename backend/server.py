@@ -1,4 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Header
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -166,13 +168,41 @@ async def get_weekly_stats(x_user_id: Optional[str] = Header(default=None)):
     return {"daily_hours": daily_hours, "total_hours": round(sum(daily_mins) / 60, 1)}
 
 
+import base64 as b64lib
+
+IMAGES_DIR = Path("/app/backend/images")
+IMAGES_DIR.mkdir(exist_ok=True)
+
+
 @api_router.post("/errors", response_model=ErrorScan)
 async def create_error(body: ErrorScanCreate, x_user_id: Optional[str] = Header(default=None)):
     uid = require_user(x_user_id)
     err = ErrorScan(user_id=uid, **body.dict())
+
+    # Save image to disk if provided, store URL instead of base64
+    if body.image_base64:
+        try:
+            img_data = b64lib.b64decode(body.image_base64)
+            img_path = IMAGES_DIR / f"{err.id}.jpg"
+            img_path.write_bytes(img_data)
+            err.image_base64 = f"/api/images/{err.id}.jpg"  # store URL, not raw base64
+            logger.info(f"Image saved: {img_path} ({len(img_data)} bytes)")
+        except Exception as e:
+            logger.error(f"Image save error: {e}")
+            err.image_base64 = ""
+
     doc = err.dict()
     await db.error_scans.insert_one(doc)
     return err
+
+
+@api_router.get("/images/{image_id}")
+async def serve_image(image_id: str):
+    """Serve a stored question image."""
+    img_path = IMAGES_DIR / image_id
+    if not img_path.exists():
+        raise HTTPException(status_code=404, detail="Image not found")
+    return FileResponse(str(img_path), media_type="image/jpeg")
 
 
 @api_router.get("/errors", response_model=List[ErrorScan])

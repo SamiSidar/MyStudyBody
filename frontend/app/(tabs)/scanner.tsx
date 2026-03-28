@@ -53,6 +53,7 @@ export default function ScannerScreen() {
   const [notes, setNotes] = useState('');
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [capturedBase64, setCapturedBase64] = useState(''); // stored for exam upload
   const [analyzeStep, setAnalyzeStep] = useState(0);
   const [showSubjectPicker, setShowSubjectPicker] = useState(false);
   const [flashOn, setFlashOn] = useState(false);
@@ -142,13 +143,15 @@ export default function ScannerScreen() {
     setAiInsight('');
     setQuestionSummary('');
     setNotes('');
+    setCapturedBase64('');
     setPhase('analyzing');
 
     try {
-      // Convert image to base64
+      // Read base64 once — reuse for both Gemini analysis AND storage
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
+      setCapturedBase64(base64); // store for save
 
       // Send to Gemini Vision
       const res = await apiFetch('/api/ai/analyze-image', {
@@ -166,7 +169,6 @@ export default function ScannerScreen() {
         setAutoSubject('Math');
       }
     } catch (e) {
-      // On error, just go to form with empty fields
       setAutoSubject('Math');
     }
 
@@ -176,28 +178,13 @@ export default function ScannerScreen() {
   const handleSaveError = async () => {
     setSaving(true);
     try {
-      // Read image as base64 for storage (compressed)
-      let storedBase64 = '';
-      if (capturedImage) {
-        try {
-          const manipulated = await ImageManipulator.manipulateAsync(
-            capturedImage,
-            [{ resize: { width: 800 } }],
-            { compress: 0.4, format: ImageManipulator.SaveFormat.JPEG }
-          );
-          storedBase64 = await FileSystem.readAsStringAsync(manipulated.uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-        } catch (_) {}
-      }
-
       await apiFetch('/api/errors', {
         method: 'POST',
         body: JSON.stringify({
           subject: autoSubject || 'Math',
           topic: autoTopic || autoSubject || 'Genel',
           notes: notes.trim() || questionSummary,
-          image_base64: storedBase64,
+          image_base64: capturedBase64,      // already read during processImage
           question_summary: questionSummary,
           ai_insight: aiInsight,
         }),
@@ -209,6 +196,7 @@ export default function ScannerScreen() {
       setSaved(false);
       setPhase('viewfinder');
       setCapturedImage(null);
+      setCapturedBase64('');
       setNotes('');
       setAiInsight('');
       setAutoTopic('');
@@ -219,6 +207,7 @@ export default function ScannerScreen() {
   const resetScanner = () => {
     setPhase('viewfinder');
     setCapturedImage(null);
+    setCapturedBase64('');
     setNotes('');
     setSaved(false);
     setAiInsight('');

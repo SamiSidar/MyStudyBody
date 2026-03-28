@@ -410,7 +410,12 @@ const s = StyleSheet.create({
 
   // Title
   title: { fontSize: 30, fontFamily: F.xbld, color: TXT, marginBottom: 4 },
-  subtitle: { fontSize: 13, fontFamily: F.reg, color: MUTED, marginBottom: 22 },
+  subtitle: { fontSize: 13, fontFamily: F.reg, color: MUTED, marginBottom: 16 },
+
+  // AI Report Button
+  aiReportBtn: { borderRadius: 14, overflow: 'hidden', marginBottom: 18 },
+  aiReportBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 15 },
+  aiReportBtnText: { fontSize: 15, fontFamily: F.bld, color: '#fff' },
 
   // Errors Chart Card
   card: { backgroundColor: SURFACE, borderRadius: 18, padding: 18, marginBottom: 14 },
@@ -430,6 +435,34 @@ const s = StyleSheet.create({
   bar: { width: '100%', borderRadius: 8 },
   barLabel: { fontSize: 10, fontFamily: F.bld, color: MUTED, marginTop: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
 
+  // AI Tag
+  aiTagSmall: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: `${CYAN}15`, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  aiTagSmallText: { fontSize: 10, fontFamily: F.xbld, color: CYAN },
+
+  // Topic Breakdown
+  topicRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: SURFACE_HL },
+  topicDot: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center' },
+  topicDotInner: { width: 10, height: 10, borderRadius: 5 },
+  topicContent: { flex: 1 },
+  topicSubject: { fontSize: 10, fontFamily: F.bld, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.5 },
+  topicName: { fontSize: 14, fontFamily: F.sem, color: TXT, marginTop: 1 },
+  topicBadge: { backgroundColor: SURFACE_HL, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  topicCount: { fontSize: 13, fontFamily: F.xbld, color: TXT },
+
+  // Weak Subjects
+  weakItem: { flexDirection: 'row', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: SURFACE_HL },
+  weakPriorityBar: { width: 3, borderRadius: 2, minHeight: 60 },
+  weakContent: { flex: 1 },
+  weakHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  weakSubject: { fontSize: 15, fontFamily: F.bld, color: TXT },
+  priorityChip: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
+  priorityChipText: { fontSize: 10, fontFamily: F.xbld, letterSpacing: 0.5 },
+  weakTopic: { fontSize: 13, fontFamily: F.sem, color: CYAN, marginBottom: 4 },
+  weakReason: { fontSize: 12, fontFamily: F.reg, color: MUTED, lineHeight: 17, marginBottom: 6 },
+  weakStats: { flexDirection: 'row', gap: 14 },
+  weakStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  weakStatText: { fontSize: 11, fontFamily: F.sem, color: MUTED },
+
   // Metric Cards
   metricCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 18, marginBottom: 12, flexDirection: 'row', alignItems: 'center', gap: 14, overflow: 'hidden' },
   metricIcon: { width: 46, height: 46, borderRadius: 14, backgroundColor: `${CYAN}18`, alignItems: 'center', justifyContent: 'center' },
@@ -444,6 +477,7 @@ const s = StyleSheet.create({
   planHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
   planHeaderIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   planTitle: { fontSize: 16, fontFamily: F.bld, color: TXT },
+  planSubtitle: { fontSize: 11, fontFamily: F.reg, color: MUTED, marginTop: 2 },
   planItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderRadius: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: SURFACE_HL },
   planItemIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   planItemContent: { flex: 1 },
@@ -454,7 +488,8 @@ const s = StyleSheet.create({
   startBtnText: { fontSize: 11, fontFamily: F.xbld, color: '#fff', letterSpacing: 0.5 },
 
   // Insight Cards
-  insightCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 16, marginBottom: 10 },
-  insightTitle: { fontSize: 12, fontFamily: F.bld, letterSpacing: 0.6, marginBottom: 8 },
+  insightCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 16, marginBottom: 10, borderLeftWidth: 3, borderLeftColor: CYAN },
+  insightHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  insightTitle: { fontSize: 12, fontFamily: F.bld, letterSpacing: 0.6 },
   insightBody: { fontSize: 13, fontFamily: F.reg, color: MUTED, lineHeight: 19 },
 });

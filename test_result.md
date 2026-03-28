@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Build a cross-platform mobile app called MyStudyBody - an AI-driven EdTech productivity app. Core features: Dashboard, Pomodoro Timer, Error Scanner, AI Reports. Academic visual overhaul requested: remove all emojis, use Inter font, add scanning animation to scanner, professional iconography."
+user_problem_statement: "Build a cross-platform mobile app called MyStudyBody - an AI-driven EdTech productivity app. Core features: Dashboard, Pomodoro Timer, Error Scanner, AI Reports. Academic visual overhaul requested: remove all emojis, use Inter font, add scanning animation to scanner, professional iconography. AI integration: Gemini 2.5 Flash for error classification and personalized study recommendations."
 
 backend:
   - task: "Stats weekly API"
@@ -138,6 +138,28 @@ backend:
       - working: true
         agent: "main"
         comment: "POST /api/sessions endpoint working."
+  - task: "AI Classify Error API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "POST /api/ai/classify-error uses Gemini 2.5 Flash to classify error notes into subject and topic. Returns Turkish insight. Curl tested and working."
+  - task: "AI Study Report API"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "GET /api/ai/study-report uses Gemini 2.5 Flash. Analyzes user errors+sessions and returns Turkish weak_subjects, recommendations, topic_breakdown, insights. Curl tested and confirmed working."
 
 frontend:
   - task: "Dashboard Academic Redesign - No Emojis, Inter Font, Mockup Match"
@@ -150,7 +172,7 @@ frontend:
     status_history:
       - working: true
         agent: "main"
-        comment: "Full redesign: avatar+MyStudyBody header, motivational headline, performance overview card, weak subjects with warning icon, action cards with gradient borders, daily focus trends chart. All emojis removed. Inter font applied. Screenshot confirmed working."
+        comment: "Full redesign confirmed working via screenshot."
   - task: "Scanner AI Animation + Camera-like UI"
     implemented: true
     working: true
@@ -161,8 +183,8 @@ frontend:
     status_history:
       - working: true
         agent: "main"
-        comment: "Camera-like interface with PRO TIP overlay, corner brackets, horizontal scan line animation, AI analyzing status bar, gallery/capture/flash controls. Screenshot confirmed working."
-  - task: "Reports AI Reports Redesign"
+        comment: "Camera-like interface confirmed working. Added AI classify button, notes field for AI classification, insightBox for AI response. Turkish UI texts added."
+  - task: "Reports AI Reports with Real AI"
     implemented: true
     working: true
     file: "frontend/app/(tabs)/reports.tsx"
@@ -172,7 +194,7 @@ frontend:
     status_history:
       - working: true
         agent: "main"
-        comment: "AI Reports with Precision Rate 92.4%, Deep Focus 17.5h, study plan with icons, insight cards. Screenshot confirmed working."
+        comment: "Added AI Raporu Olustur button, topic_breakdown section, weak_subjects section, real weekly hours from API, AI insights. Screenshot confirmed rendering correctly."
   - task: "Pomodoro No-Emoji + Inter Font + Subject Icons"
     implemented: true
     working: true
@@ -183,7 +205,7 @@ frontend:
     status_history:
       - working: true
         agent: "main"
-        comment: "Removed all emojis from alerts/subtitle. Added subject-specific icons in modal (hash for Math, zap for Physics, etc). Inter font applied. Screenshot confirmed working."
+        comment: "Removed all emojis. Focus Shield added (expo-keep-awake + expo-notifications)."
   - task: "Profile Screen (New)"
     implemented: true
     working: true
@@ -194,7 +216,7 @@ frontend:
     status_history:
       - working: true
         agent: "main"
-        comment: "New profile screen with avatar, stats grid, preferences toggles, app info links. Screenshot confirmed working."
+        comment: "Profile screen confirmed working."
   - task: "Tab Layout - Focus/Scan/Reports/Profile with Feather Icons"
     implemented: true
     working: true
@@ -205,25 +227,23 @@ frontend:
     status_history:
       - working: true
         agent: "main"
-        comment: "Updated tabs to Focus (target icon), Scan (camera), Reports (bar-chart-2), Profile (user). Pomodoro hidden from tabs but accessible via router. Screenshot confirmed working."
+        comment: "Tab navigation confirmed working via screenshot."
 
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 1
+  test_sequence: 2
   run_ui: false
 
 test_plan:
   current_focus:
-    - "Dashboard Academic Redesign"
-    - "Scanner AI Animation"
-    - "Reports Redesign"
-    - "Pomodoro No-Emoji Update"
-    - "Profile Screen"
+    - "AI Classify Error API"
+    - "AI Study Report API"
+    - "Reports AI integration UI"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
 
 agent_communication:
   - agent: "main"
-    message: "Completed full academic visual overhaul of all 4 tab screens plus new Profile screen. All emojis removed and replaced with Feather icons. Inter font applied throughout. Scanner has camera-like interface with PRO TIP card, corner brackets, horizontal scan line animation. Dashboard has new design matching mockup. Reports has Precision Rate and Deep Focus metrics. Profile is new. Screenshots taken and all screens confirmed working."
+    message: "Implemented full AI integration using Gemini 2.5 Flash (free). Backend: 2 new AI endpoints - /api/ai/classify-error and /api/ai/study-report. Frontend: Scanner has AI classify button with notes field and insight display. Reports has AI Raporu Olustur button, topic breakdown, weak subjects analysis, all in Turkish. Both endpoints tested with curl and confirmed working. UI screenshots verified for scanner and reports screens."

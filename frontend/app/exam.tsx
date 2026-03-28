@@ -58,6 +58,7 @@ export default function ExamScreen() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(false);
   const [questionCount, setQuestionCount] = useState<number | null>(null);
+  const [countLoading, setCountLoading] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [results, setResults] = useState<QuestionResult[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -69,19 +70,23 @@ export default function ExamScreen() {
   // Fetch count whenever filter changes
   useEffect(() => {
     if (phase === 'filter') fetchCount();
-  }, [timeFilter, subject]);
+  }, [timeFilter, subject, phase]);
 
   const fetchCount = async () => {
+    setCountLoading(true);
     try {
       const sub = subject === 'Tumu' ? 'all' : subject;
       const res = await apiFetch(`/api/exam/questions?time_filter=${timeFilter}&subject=${sub}`);
       if (res.ok) {
         const data = await res.json();
         setQuestionCount(data.length);
+      } else {
+        setQuestionCount(0);
       }
     } catch (_) {
       setQuestionCount(0);
     }
+    setCountLoading(false);
   };
 
   const startExam = async () => {
@@ -172,7 +177,12 @@ export default function ExamScreen() {
               <Feather name="arrow-left" size={20} color={TXT} />
             </TouchableOpacity>
             <Text style={s.headerTitle}>Pratik Sinav Olustur</Text>
-            <View style={{ width: 36 }} />
+            <TouchableOpacity onPress={fetchCount} style={s.backBtn} disabled={countLoading}>
+              {countLoading
+                ? <ActivityIndicator size="small" color={CYAN} />
+                : <Feather name="refresh-cw" size={18} color={CYAN} />
+              }
+            </TouchableOpacity>
           </View>
 
           <Text style={s.filterSectionLabel}>ZAMAN ARALIGI</Text>
@@ -213,35 +223,39 @@ export default function ExamScreen() {
 
           {/* Count Card */}
           <View style={s.countCard}>
-            <Feather name="book-open" size={22} color={CYAN} />
+            <View style={[s.countIconWrap, { backgroundColor: questionCount === 0 ? `${MUTED}15` : `${CYAN}18` }]}>
+              <Feather name="book-open" size={22} color={questionCount === 0 ? MUTED : CYAN} />
+            </View>
             <View style={{ flex: 1 }}>
               <Text style={s.countLabel}>BULUNAN SORU</Text>
-              <Text style={s.countValue}>
-                {questionCount === null ? '...' : questionCount === 0 ? 'Soru yok' : `${questionCount} soru`}
-              </Text>
+              {countLoading
+                ? <ActivityIndicator size="small" color={CYAN} style={{ marginTop: 4 }} />
+                : <Text style={[s.countValue, { color: questionCount === 0 ? MUTED : CYAN }]}>
+                    {questionCount === null ? '...' : questionCount === 0 ? 'Henuz soru yok' : `${questionCount} soru`}
+                  </Text>
+              }
             </View>
-            {questionCount === 0 && (
-              <Text style={s.countHint}>Once scanner ile soru yukleyin</Text>
-            )}
           </View>
 
-          {questionCount !== null && questionCount === 0 && (
+          {/* Empty state — subtle, not error */}
+          {!countLoading && questionCount === 0 && (
             <View style={s.emptyHint}>
-              <Feather name="camera" size={32} color={MUTED} />
               <Text style={s.emptyHintText}>
-                Secilen filtreler icin kayitli soru bulunamadi.{'\n'}
-                Scanner ile hata yuklemeye baslayin.
+                Bu filtre icin kayitli soru bulunamadi.{'\n'}
+                Scanner ile soru yukleyin, sonra yenilemek icin {' '}
+                <Text style={{ color: CYAN }}>yenile butonuna</Text> basin.
               </Text>
               <TouchableOpacity
                 style={s.goScanBtn}
                 onPress={() => router.push('/(tabs)/scanner')}
               >
+                <Feather name="camera" size={14} color={CYAN} />
                 <Text style={s.goScanText}>Tarayiciya Git</Text>
               </TouchableOpacity>
             </View>
           )}
 
-          {questionCount !== null && questionCount > 0 && (
+          {!countLoading && questionCount !== null && questionCount > 0 && (
             <TouchableOpacity
               style={[s.startBtn, loading && { opacity: 0.6 }]}
               onPress={startExam}
@@ -523,13 +537,13 @@ const s = StyleSheet.create({
   chipActive: { borderColor: 'transparent' },
   chipText: { fontSize: 13, fontFamily: F.sem, color: MUTED },
   chipTextActive: { color: '#fff', fontFamily: F.bld },
-  countCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: SURFACE, borderRadius: 16, padding: 18, marginTop: 24, marginBottom: 12, borderWidth: 1, borderColor: `${CYAN}20` },
+  countCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: SURFACE, borderRadius: 16, padding: 18, marginTop: 24, marginBottom: 20, borderWidth: 1, borderColor: `${CYAN}20` },
+  countIconWrap: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   countLabel: { fontSize: 10, fontFamily: F.xbld, color: MUTED, letterSpacing: 1.0 },
-  countValue: { fontSize: 22, fontFamily: F.xbld, color: CYAN, marginTop: 2 },
-  countHint: { fontSize: 11, fontFamily: F.reg, color: MUTED },
-  emptyHint: { alignItems: 'center', paddingVertical: 32, gap: 12 },
+  countValue: { fontSize: 22, fontFamily: F.xbld, marginTop: 2 },
+  emptyHint: { alignItems: 'center', paddingVertical: 16, paddingHorizontal: 8, gap: 14 },
   emptyHintText: { fontSize: 13, fontFamily: F.reg, color: MUTED, textAlign: 'center', lineHeight: 20 },
-  goScanBtn: { backgroundColor: SURFACE, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: `${CYAN}30` },
+  goScanBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: SURFACE, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: `${CYAN}30` },
   goScanText: { fontSize: 14, fontFamily: F.bld, color: CYAN },
   startBtn: { borderRadius: 16, overflow: 'hidden', marginTop: 8 },
   startBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16 },

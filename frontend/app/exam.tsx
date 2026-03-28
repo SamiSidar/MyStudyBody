@@ -11,6 +11,22 @@ import { GRADIENTS } from '../src/constants/colors';
 import { F } from '../src/constants/fonts';
 import { apiFetch } from '../src/utils/api';
 
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+
+/** Backend'den gelen image_base64 alanı artık URL (/api/images/xxx.jpg) saklıyor.
+ *  Eski kayıtlar için hâlâ base64 olabilir. Her iki formatı destekliyoruz.
+ */
+function getImageUri(imageField: string): string | null {
+  if (!imageField) return null;
+  if (imageField.startsWith('/api/') || imageField.startsWith('http')) {
+    // Yeni format: disk'teki dosya URL'si
+    const base = imageField.startsWith('http') ? '' : BACKEND_URL;
+    return `${base}${imageField}`;
+  }
+  // Eski format: ham base64 verisi
+  return `data:image/jpeg;base64,${imageField}`;
+}
+
 const BG = '#080D1A';
 const SURFACE = '#0F1829';
 const SURFACE_HL = '#1A2540';
@@ -320,20 +336,24 @@ export default function ExamScreen() {
             <Text style={s.topicLabel}>{q.topic}</Text>
 
             {/* Question Image */}
-            {q.image_base64 ? (
-              <View style={s.imageCard}>
-                <Image
-                  source={{ uri: `data:image/jpeg;base64,${q.image_base64}` }}
-                  style={s.questionImage}
-                  resizeMode="contain"
-                />
-              </View>
-            ) : (
-              <View style={s.noImageCard}>
-                <Feather name="image" size={40} color={MUTED} />
-                <Text style={s.noImageText}>Gorsel bulunamadi</Text>
-              </View>
-            )}
+            {(() => {
+              const imgUri = getImageUri(q.image_base64);
+              return imgUri ? (
+                <View style={s.imageCard}>
+                  <Image
+                    source={{ uri: imgUri }}
+                    style={s.questionImage}
+                    resizeMode="contain"
+                    onError={() => {}}
+                  />
+                </View>
+              ) : (
+                <View style={s.noImageCard}>
+                  <Feather name="image" size={40} color={MUTED} />
+                  <Text style={s.noImageText}>Gorsel bulunamadi</Text>
+                </View>
+              );
+            })()}
 
             {/* Question Summary */}
             {!!q.question_summary && (

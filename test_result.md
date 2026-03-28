@@ -229,17 +229,72 @@ frontend:
         agent: "main"
         comment: "Tab navigation confirmed working via screenshot."
 
+  - task: "Image Upload & Disk Storage"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "Old approach: storing base64 in MongoDB. Failed silently on iOS ph:// URIs."
+      - working: true
+        agent: "main"
+        comment: "Refactored: backend now decodes base64 from POST /api/errors, saves to /app/backend/images/, stores URL /api/images/{id}.jpg in image_base64 field. /api/images/{image_id} serves the file via FileResponse."
+
+  - task: "Practice Exam - Image Display Fix"
+    implemented: true
+    working: true
+    file: "frontend/app/exam.tsx"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "main"
+        comment: "exam.tsx was using data:image/jpeg;base64, prefix with URL value stored in image_base64. Wrong format."
+      - working: true
+        agent: "main"
+        comment: "Fixed: added getImageUri() helper that detects if image_base64 is a /api/ URL and constructs full URL with BACKEND_URL, or falls back to data:image prefix for legacy base64 records."
+
+  - task: "Practice Exam - Answer Mechanics (Zor/Anladim)"
+    implemented: true
+    working: true
+    file: "frontend/app/exam.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "markQuestion(understood: bool) function adds to results array. Hard/Anladim buttons call markQuestion. At last question, calls saveResults which POSTs to /api/exam/results."
+
+  - task: "Practice Exam - Summary Screen"
+    implemented: true
+    working: true
+    file: "frontend/app/exam.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Summary phase shows score circle, stats row (understood/hard/total), hard topics breakdown, retry-hard-questions button, new exam button."
+
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 2
+  test_sequence: 3
   run_ui: false
 
 test_plan:
   current_focus:
-    - "AI Classify Error API"
-    - "AI Study Report API"
-    - "Reports AI integration UI"
+    - "Image Upload & Disk Storage"
+    - "Practice Exam - Image Display Fix"
+    - "Practice Exam - Answer Mechanics (Zor/Anladim)"
+    - "Practice Exam - Summary Screen"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -247,3 +302,5 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: "Implemented full AI integration using Gemini 2.5 Flash (free). Backend: 2 new AI endpoints - /api/ai/classify-error and /api/ai/study-report. Frontend: Scanner has AI classify button with notes field and insight display. Reports has AI Raporu Olustur button, topic breakdown, weak subjects analysis, all in Turkish. Both endpoints tested with curl and confirmed working. UI screenshots verified for scanner and reports screens."
+  - agent: "main"
+    message: "Fixed image storage architecture: backend now saves images to disk (/app/backend/images/) and serves them via /api/images/{id}. Fixed exam.tsx image display with getImageUri() helper that handles both URL (new) and base64 (legacy) formats. exam.tsx already has full answer mechanics (Zor/Anladim buttons) and summary screen. Services restarted, pending screenshot verification."

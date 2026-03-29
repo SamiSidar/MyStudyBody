@@ -212,6 +212,121 @@ async def get_errors(x_user_id: Optional[str] = Header(default=None)):
     return docs
 
 
+@api_router.get("/user/settings")
+async def get_user_settings(x_user_id: Optional[str] = Header(default=None)):
+    """Kullanıcı ayarları: haftalık hedef, bildirim tercihi."""
+    uid = require_user(x_user_id)
+    settings = await db.user_settings.find_one({"user_id": uid}, {"_id": 0}) or {}
+    return {
+        "weekly_goal_hours": settings.get("weekly_goal_hours"),
+        "notifications_disabled": settings.get("notifications_disabled", False),
+    }
+
+
+@api_router.put("/user/settings")
+async def update_user_settings(
+    payload: Dict[str, Any],
+    x_user_id: Optional[str] = Header(default=None),
+):
+    """Haftalık hedef ve bildirim ayarı kaydet."""
+    uid = require_user(x_user_id)
+    allowed = {k: v for k, v in payload.items() if k in ("weekly_goal_hours", "notifications_disabled")}
+    await db.user_settings.update_one(
+        {"user_id": uid},
+        {"$set": {**allowed, "user_id": uid, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True,
+    )
+    return {"status": "ok"}
+
+
+@api_router.get("/stats/performance")
+async def get_performance_stats(x_user_id: Optional[str] = Header(default=None)):
+    """
+    Haftalık Hedef %, Verimlilik %, Odak Skoru hesapla.
+
+    Verimlilik = ort(sınav_anladım_oranı, hata_takip_oranı)
+    Odak Skoru = ortalama_oturum_süresi → harf notu
+                 + bildirimler kapalıysa %10 bonus
+    """
+    uid = require_user(x_user_id)
+
+    def parse_dt(s) -> datetime:
+        if isinstance(s, datetime):
+            return s if s.tzinfo else s.replace(tzinfo=timezone.utc)
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+
+    # ── 1. Kullanıcı ayarları
+    settings = await db.user_settings.find_one({"user_id": uid}, {"_id": 0}) or {}
+    weekly_goal: Optional[int] = settings.get("weekly_goal_hours")
+    notifs_disabled: bool = settings.get("notifications_disabled", False)
+
+    # ── 2. Bu haftanın çalışma saatleri
+    week_start = datetime.now(timezone.utc) - timedelta(days=7)
+    all_sessions = await db.study_sessions.find({"user_id": uid}, {"_id": 0}).to_list(2000)
+    weekly_sessions = [
+        s for s in all_sessions
+        if parse_dt(s.get("created_at", "2000-01-01T00:00:00Z")) > week_start
+    ]
+    weekly_hours = round(sum(s.get("duration_minutes", 0) for s in weekly_sessions) / 60, 1)
+
+    # ── 3. Haftalık Hedef %
+    goal_pct: Optional[int] = None
+    if weekly_goal and weekly_goal > 0:
+        goal_pct = min(100, round(weekly_hours / weekly_goal * 100))
+
+    # ── 4. Verimlilik
+    # A) Sınav "Anladım" oranı
+    exam_results = await db.exam_results.find({"user_id": uid}, {"_id": 0}).to_list(2000)
+    exam_score: Optional[int] = None
+    if exam_results:
+        anladim = sum(1 for r in exam_results if r.get("understood"))
+        exam_score = round(anladim / len(exam_results) * 100)
+
+    # B) Hata takip oranı: hata tarihinden SONRA aynı dersten oturum açmış mı?
+    errors = await db.error_scans.find({"user_id": uid}, {"_id": 0}).to_list(2000)
+    follow_score: Optional[int] = None
+    if errors:
+        follow_count = 0
+        for err in errors:
+            err_time = parse_dt(err.get("created_at", "2000-01-01T00:00:00Z"))
+            subj = err.get("subject", "")
+            if any(
+                s.get("subject") == subj
+                and parse_dt(s.get("created_at", "2000-01-01T00:00:00Z")) > err_time
+                for s in all_sessions
+            ):
+                follow_count += 1
+        follow_score = round(follow_count / len(errors) * 100)
+
+    components = [c for c in [exam_score, follow_score] if c is not None]
+    efficiency_pct: Optional[int] = round(sum(components) / len(components)) if components else None
+
+    # ── 5. Odak Skoru
+    focus_grade: Optional[str] = None
+    if all_sessions:
+        avg_min = sum(s.get("duration_minutes", 0) for s in all_sessions) / len(all_sessions)
+        effective = avg_min * 1.1 if notifs_disabled else avg_min  # bildirim bonusu
+        if effective >= 50:
+            focus_grade = "A+"
+        elif effective >= 40:
+            focus_grade = "A"
+        elif effective >= 25:
+            focus_grade = "B+"
+        elif effective >= 15:
+            focus_grade = "B"
+        else:
+            focus_grade = "C"
+
+    return {
+        "weekly_goal_hours": weekly_goal,
+        "weekly_hours": weekly_hours,
+        "weekly_goal_pct": goal_pct,
+        "efficiency_pct": efficiency_pct,
+        "focus_grade": focus_grade,
+        "notifications_disabled": notifs_disabled,
+    }
+
+
 @api_router.get("/stats/subjects")
 async def get_subject_stats(x_user_id: Optional[str] = Header(default=None)):
     """Total study time per subject (all-time), plus overall totals."""

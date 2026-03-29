@@ -51,6 +51,13 @@ const RED = '#EF4444';
 const PURPLE_START = '#A78BFA';
 const PURPLE_END = '#7C3AED';
 
+interface PerfStats {
+  weekly_goal_pct: number | null;
+  efficiency_pct: number | null;
+  focus_grade: string | null;
+  notifications_disabled: boolean;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const router = useRouter();
@@ -58,6 +65,12 @@ export default function Dashboard() {
   const [weakSubjects, setWeakSubjects] = useState(MOCK_WEAK_SUBJECTS);
   const [refreshing, setRefreshing] = useState(false);
   const [chartPeriod, setChartPeriod] = useState<'Day' | 'Week'>('Week');
+  const [perfStats, setPerfStats] = useState<PerfStats>({
+    weekly_goal_pct: null,
+    efficiency_pct: null,
+    focus_grade: null,
+    notifications_disabled: false,
+  });
 
   // Subject breakdown modal
   const [showSubjectModal, setShowSubjectModal] = useState(false);
@@ -72,9 +85,10 @@ export default function Dashboard() {
 
   const fetchData = async () => {
     try {
-      const [wRes, eRes] = await Promise.all([
+      const [wRes, eRes, pRes] = await Promise.all([
         apiFetch('/api/stats/weekly'),
         apiFetch('/api/stats/errors'),
+        apiFetch('/api/stats/performance'),
       ]);
       if (wRes.ok) {
         const d = await wRes.json();
@@ -83,6 +97,10 @@ export default function Dashboard() {
       if (eRes.ok) {
         const d = await eRes.json();
         if (d.length > 0) setWeakSubjects(d);
+      }
+      if (pRes.ok) {
+        const d = await pRes.json();
+        setPerfStats(d);
       }
     } catch (_) {}
   };
@@ -173,17 +191,28 @@ export default function Dashboard() {
           <View style={s.statsRow}>
             <View style={s.statBox}>
               <Text style={s.statBoxLabel}>Haftalık{`\n`}Hedef</Text>
-              <Text style={s.statBoxValue}>82%</Text>
+              <Text style={s.statBoxValue}>
+                {perfStats.weekly_goal_pct != null ? `${perfStats.weekly_goal_pct}%` : '—'}
+              </Text>
             </View>
             <View style={s.statDivider} />
             <View style={s.statBox}>
               <Text style={s.statBoxLabel}>Verimlilik</Text>
-              <Text style={s.statBoxValue}>94%</Text>
+              <Text style={s.statBoxValue}>
+                {perfStats.efficiency_pct != null ? `${perfStats.efficiency_pct}%` : '—'}
+              </Text>
             </View>
             <View style={s.statDivider} />
             <View style={s.statBox}>
               <Text style={s.statBoxLabel}>Odak{`\n`}Skoru</Text>
-              <Text style={[s.statBoxValue, { color: CYAN }]}>A+</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={[s.statBoxValue, { color: CYAN }]}>
+                  {perfStats.focus_grade ?? '—'}
+                </Text>
+                {perfStats.notifications_disabled && perfStats.focus_grade && (
+                  <Feather name="bell-off" size={12} color={CYAN} />
+                )}
+              </View>
             </View>
           </View>
         </View>

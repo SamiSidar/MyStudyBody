@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, ActivityIndicator,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, ActivityIndicator, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -42,11 +42,15 @@ function getSubjectColor(subject: string): string {
   return SUBJECT_COLORS[subject] || '#4FACFE';
 }
 
-const SETTINGS = [
-  { label: 'Notifications', icon: 'bell', toggle: true },
-  { label: 'Sound Effects', icon: 'volume-2', toggle: true },
-  { label: 'Dark Mode', icon: 'moon', toggle: false },
-  { label: 'Study Reminders', icon: 'calendar', toggle: true },
+const GOAL_OPTIONS = [
+  { label: 'Hedef belirleme', value: null },
+  { label: '5 saat / hafta', value: 5 },
+  { label: '10 saat / hafta', value: 10 },
+  { label: '15 saat / hafta', value: 15 },
+  { label: '20 saat / hafta', value: 20 },
+  { label: '25 saat / hafta', value: 25 },
+  { label: '30 saat / hafta', value: 30 },
+  { label: '40 saat / hafta', value: 40 },
 ];
 
 const INFO_LINKS = [
@@ -59,7 +63,6 @@ export default function ProfileScreen() {
   const { toggleTheme, theme } = useTheme();
   const { user, logout } = useAuth();
   const router = useRouter();
-  const [notifs, setNotifs] = useState(true);
   const [sound, setSound] = useState(true);
   const [reminders, setReminders] = useState(false);
 
@@ -69,22 +72,60 @@ export default function ProfileScreen() {
   const [subjectStats, setSubjectStats] = useState<SubjectStat[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
 
+  // User settings (synced with backend)
+  const [weeklyGoal, setWeeklyGoal] = useState<number | null>(null);
+  const [notifsDisabled, setNotifsDisabled] = useState(false);
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchAll = async () => {
       try {
-        const res = await apiFetch('/api/stats/subjects');
-        if (res.ok) {
-          const d = await res.json();
+        const [statsRes, settingsRes] = await Promise.all([
+          apiFetch('/api/stats/subjects'),
+          apiFetch('/api/user/settings'),
+        ]);
+        if (statsRes.ok) {
+          const d = await statsRes.json();
           setTotalHours(d.total_hours > 0 ? `${d.total_hours}s` : '0s');
           setSessionCount(String(d.session_count || 0));
           setSubjectStats(d.subjects || []);
+        }
+        if (settingsRes.ok) {
+          const d = await settingsRes.json();
+          setWeeklyGoal(d.weekly_goal_hours ?? null);
+          setNotifsDisabled(d.notifications_disabled ?? false);
         }
       } catch (_) {} finally {
         setLoadingStats(false);
       }
     };
-    fetchStats();
+    fetchAll();
   }, []);
+
+  const saveSettings = async (patch: Record<string, unknown>) => {
+    setSavingSettings(true);
+    try {
+      await apiFetch('/api/user/settings', {
+        method: 'PUT',
+        body: JSON.stringify(patch),
+      });
+    } catch (_) {} finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleGoalSelect = (value: number | null) => {
+    setWeeklyGoal(value);
+    setShowGoalModal(false);
+    saveSettings({ weekly_goal_hours: value });
+  };
+
+  const handleNotifsToggle = () => {
+    const newVal = !notifsDisabled;
+    setNotifsDisabled(newVal);
+    saveSettings({ notifications_disabled: newVal });
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -95,27 +136,14 @@ export default function ProfileScreen() {
   const displayEmail = user?.email || '';
   const avatarInitial = displayName[0].toUpperCase();
 
+  const goalLabel = weeklyGoal ? `${weeklyGoal} saat/hafta` : '—';
+
   const STATS = [
     { label: 'Ders Saati', value: totalHours, icon: 'clock', color: CYAN },
     { label: 'Seri', value: '7 gün', icon: 'zap', color: ORANGE },
     { label: 'Oturum', value: sessionCount, icon: 'target', color: '#A78BFA' },
     { label: 'Doğruluk', value: '92%', icon: 'crosshair', color: '#10B981' },
   ];
-
-  const getToggleValue = (label: string) => {
-    if (label === 'Notifications') return notifs;
-    if (label === 'Sound Effects') return sound;
-    if (label === 'Dark Mode') return theme === 'dark';
-    if (label === 'Study Reminders') return reminders;
-    return false;
-  };
-
-  const handleToggle = (label: string) => {
-    if (label === 'Notifications') setNotifs((v) => !v);
-    else if (label === 'Sound Effects') setSound((v) => !v);
-    else if (label === 'Dark Mode') toggleTheme();
-    else if (label === 'Study Reminders') setReminders((v) => !v);
-  };
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -219,23 +247,98 @@ export default function ProfileScreen() {
         {/* Settings Section */}
         <Text style={s.sectionLabel}>PREFERENCES</Text>
         <View style={s.settingsCard}>
-          {SETTINGS.map((setting, i) => (
-            <View key={i} style={[s.settingRow, i < SETTINGS.length - 1 && s.settingDivider]}>
-              <View style={s.settingLeft}>
-                <View style={s.settingIconBox}>
-                  <Feather name={setting.icon as any} size={17} color={CYAN} />
-                </View>
-                <Text style={s.settingLabel}>{setting.label}</Text>
+
+          {/* Haftalık Hedef */}
+          <TouchableOpacity
+            style={[s.settingRow, s.settingDivider]}
+            onPress={() => setShowGoalModal(true)}
+            activeOpacity={0.8}
+          >
+            <View style={s.settingLeft}>
+              <View style={s.settingIconBox}>
+                <Feather name="target" size={17} color={CYAN} />
               </View>
-              <Switch
-                value={getToggleValue(setting.label)}
-                onValueChange={() => handleToggle(setting.label)}
-                trackColor={{ false: SURFACE_HL, true: `${CYAN}60` }}
-                thumbColor={getToggleValue(setting.label) ? CYAN : MUTED}
-                ios_backgroundColor={SURFACE_HL}
-              />
+              <View>
+                <Text style={s.settingLabel}>Haftalık Hedef</Text>
+                <Text style={s.settingSubLabel}>{goalLabel}</Text>
+              </View>
             </View>
-          ))}
+            <View style={s.settingRight}>
+              {savingSettings && <ActivityIndicator size="small" color={CYAN} />}
+              <Feather name="chevron-right" size={16} color={MUTED} />
+            </View>
+          </TouchableOpacity>
+
+          {/* Bildirimler Kapalı (Odak Skoru etkiler) */}
+          <View style={[s.settingRow, s.settingDivider]}>
+            <View style={s.settingLeft}>
+              <View style={s.settingIconBox}>
+                <Feather name={notifsDisabled ? 'bell-off' : 'bell'} size={17} color={CYAN} />
+              </View>
+              <View>
+                <Text style={s.settingLabel}>Ders Modunda Bildirimleri Kapat</Text>
+                <Text style={s.settingSubLabel}>Odak Skoru'nu etkiler</Text>
+              </View>
+            </View>
+            <Switch
+              value={notifsDisabled}
+              onValueChange={handleNotifsToggle}
+              trackColor={{ false: SURFACE_HL, true: `${CYAN}60` }}
+              thumbColor={notifsDisabled ? CYAN : MUTED}
+              ios_backgroundColor={SURFACE_HL}
+            />
+          </View>
+
+          {/* Sound Effects */}
+          <View style={[s.settingRow, s.settingDivider]}>
+            <View style={s.settingLeft}>
+              <View style={s.settingIconBox}>
+                <Feather name="volume-2" size={17} color={CYAN} />
+              </View>
+              <Text style={s.settingLabel}>Sound Effects</Text>
+            </View>
+            <Switch
+              value={sound}
+              onValueChange={() => setSound((v) => !v)}
+              trackColor={{ false: SURFACE_HL, true: `${CYAN}60` }}
+              thumbColor={sound ? CYAN : MUTED}
+              ios_backgroundColor={SURFACE_HL}
+            />
+          </View>
+
+          {/* Dark Mode */}
+          <View style={[s.settingRow, s.settingDivider]}>
+            <View style={s.settingLeft}>
+              <View style={s.settingIconBox}>
+                <Feather name="moon" size={17} color={CYAN} />
+              </View>
+              <Text style={s.settingLabel}>Dark Mode</Text>
+            </View>
+            <Switch
+              value={theme === 'dark'}
+              onValueChange={toggleTheme}
+              trackColor={{ false: SURFACE_HL, true: `${CYAN}60` }}
+              thumbColor={theme === 'dark' ? CYAN : MUTED}
+              ios_backgroundColor={SURFACE_HL}
+            />
+          </View>
+
+          {/* Study Reminders */}
+          <View style={s.settingRow}>
+            <View style={s.settingLeft}>
+              <View style={s.settingIconBox}>
+                <Feather name="calendar" size={17} color={CYAN} />
+              </View>
+              <Text style={s.settingLabel}>Study Reminders</Text>
+            </View>
+            <Switch
+              value={reminders}
+              onValueChange={() => setReminders((v) => !v)}
+              trackColor={{ false: SURFACE_HL, true: `${CYAN}60` }}
+              thumbColor={reminders ? CYAN : MUTED}
+              ios_backgroundColor={SURFACE_HL}
+            />
+          </View>
         </View>
 
         {/* Info Links */}
@@ -267,6 +370,29 @@ export default function ProfileScreen() {
           <Text style={s.logoutText}>Çıkış Yap</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Haftalık Hedef Picker Modal */}
+      <Modal visible={showGoalModal} transparent animationType="fade" onRequestClose={() => setShowGoalModal(false)}>
+        <TouchableOpacity style={s.goalOverlay} activeOpacity={1} onPress={() => setShowGoalModal(false)}>
+          <View style={s.goalSheet}>
+            <Text style={s.goalTitle}>Haftalık Hedef Belirle</Text>
+            <Text style={s.goalSub}>Kaç saat ders çalışmak istiyorsun?</Text>
+            {GOAL_OPTIONS.map((opt, i) => (
+              <TouchableOpacity
+                key={i}
+                style={[s.goalOption, weeklyGoal === opt.value && s.goalOptionActive]}
+                onPress={() => handleGoalSelect(opt.value)}
+                activeOpacity={0.8}
+              >
+                <Text style={[s.goalOptionText, weeklyGoal === opt.value && { color: CYAN }]}>
+                  {opt.label}
+                </Text>
+                {weeklyGoal === opt.value && <Feather name="check" size={16} color={CYAN} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -316,9 +442,20 @@ const s = StyleSheet.create({
   settingsCard: { backgroundColor: SURFACE, borderRadius: 16, marginBottom: 20, overflow: 'hidden' },
   settingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
   settingDivider: { borderBottomWidth: 1, borderBottomColor: SURFACE_HL },
-  settingLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  settingLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1, marginRight: 8 },
+  settingRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   settingIconBox: { width: 36, height: 36, borderRadius: 10, backgroundColor: SURFACE_HL, alignItems: 'center', justifyContent: 'center' },
-  settingLabel: { fontSize: 15, fontFamily: F.reg, color: TXT },
+  settingLabel: { fontSize: 14, fontFamily: F.sem, color: TXT },
+  settingSubLabel: { fontSize: 11, fontFamily: F.reg, color: MUTED, marginTop: 2 },
+
+  // Goal Picker Modal
+  goalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  goalSheet: { backgroundColor: '#0C1628', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40 },
+  goalTitle: { fontSize: 20, fontFamily: F.xbld, color: TXT, marginBottom: 6 },
+  goalSub: { fontSize: 13, fontFamily: F.reg, color: MUTED, marginBottom: 20 },
+  goalOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, marginBottom: 8, backgroundColor: '#1A2540' },
+  goalOptionActive: { backgroundColor: `${CYAN}18`, borderWidth: 1, borderColor: `${CYAN}50` },
+  goalOptionText: { fontSize: 15, fontFamily: F.sem, color: TXT },
 
   // Version
   versionText: { fontSize: 11, fontFamily: F.reg, color: `${MUTED}80`, textAlign: 'center', marginTop: 4, marginBottom: 16 },

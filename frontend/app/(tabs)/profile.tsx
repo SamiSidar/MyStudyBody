@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { F } from '../../src/constants/fonts';
 import { useAuth } from '../../src/context/AuthContext';
 import { useRouter } from 'expo-router';
+import { apiFetch } from '../../src/utils/api';
 
 const BG = '#080D1A';
 const SURFACE = '#0F1829';
@@ -19,12 +20,27 @@ const MUTED = '#718096';
 const CYAN = '#4FACFE';
 const ORANGE = '#FF6D00';
 
-const STATS = [
-  { label: 'Study Hours', value: '17.5h', icon: 'clock', color: CYAN },
-  { label: 'Streak', value: '7 days', icon: 'zap', color: ORANGE },
-  { label: 'Sessions', value: '34', icon: 'target', color: '#A78BFA' },
-  { label: 'Accuracy', value: '92%', icon: 'crosshair', color: '#10B981' },
-];
+interface SubjectStat {
+  subject: string;
+  total_minutes: number;
+  total_hours: number;
+}
+
+const SUBJECT_COLORS: Record<string, string> = {
+  Math: '#4FACFE',
+  Physics: '#A78BFA',
+  Chemistry: '#FB923C',
+  Biology: '#10B981',
+  History: '#F59E0B',
+  Geography: '#34D399',
+  Turkish: '#F472B6',
+  English: '#60A5FA',
+  Philosophy: '#C084FC',
+};
+
+function getSubjectColor(subject: string): string {
+  return SUBJECT_COLORS[subject] || '#4FACFE';
+}
 
 const SETTINGS = [
   { label: 'Notifications', icon: 'bell', toggle: true },
@@ -47,6 +63,29 @@ export default function ProfileScreen() {
   const [sound, setSound] = useState(true);
   const [reminders, setReminders] = useState(false);
 
+  // Real stats from API
+  const [totalHours, setTotalHours] = useState<string>('—');
+  const [sessionCount, setSessionCount] = useState<string>('—');
+  const [subjectStats, setSubjectStats] = useState<SubjectStat[]>([]);
+  const [loadingStats, setLoadingStats] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await apiFetch('/api/stats/subjects');
+        if (res.ok) {
+          const d = await res.json();
+          setTotalHours(d.total_hours > 0 ? `${d.total_hours}s` : '0s');
+          setSessionCount(String(d.session_count || 0));
+          setSubjectStats(d.subjects || []);
+        }
+      } catch (_) {} finally {
+        setLoadingStats(false);
+      }
+    };
+    fetchStats();
+  }, []);
+
   const handleLogout = async () => {
     await logout();
     router.replace('/(auth)/login');
@@ -55,6 +94,13 @@ export default function ProfileScreen() {
   const displayName = user?.username || 'Kullanıcı';
   const displayEmail = user?.email || '';
   const avatarInitial = displayName[0].toUpperCase();
+
+  const STATS = [
+    { label: 'Ders Saati', value: totalHours, icon: 'clock', color: CYAN },
+    { label: 'Seri', value: '7 gün', icon: 'zap', color: ORANGE },
+    { label: 'Oturum', value: sessionCount, icon: 'target', color: '#A78BFA' },
+    { label: 'Doğruluk', value: '92%', icon: 'crosshair', color: '#10B981' },
+  ];
 
   const getToggleValue = (label: string) => {
     if (label === 'Notifications') return notifs;
@@ -108,10 +154,66 @@ export default function ProfileScreen() {
               <View style={[s.statIcon, { backgroundColor: `${stat.color}18` }]}>
                 <Feather name={stat.icon as any} size={18} color={stat.color} />
               </View>
-              <Text style={s.statValue}>{stat.value}</Text>
+              {loadingStats && (i === 0 || i === 2) ? (
+                <ActivityIndicator size="small" color={stat.color} style={{ marginBottom: 4 }} />
+              ) : (
+                <Text style={s.statValue}>{stat.value}</Text>
+              )}
               <Text style={s.statLabel}>{stat.label}</Text>
             </View>
           ))}
+        </View>
+
+        {/* Ders Dağılımı */}
+        <Text style={s.sectionLabel}>DERS DAĞILIMI</Text>
+        <View style={s.breakdownCard}>
+          {loadingStats ? (
+            <View style={s.breakdownLoading}>
+              <ActivityIndicator size="small" color={CYAN} />
+              <Text style={s.breakdownLoadingText}>Yükleniyor...</Text>
+            </View>
+          ) : subjectStats.length === 0 ? (
+            <View style={s.breakdownEmpty}>
+              <Feather name="clock" size={32} color={MUTED} />
+              <Text style={s.breakdownEmptyText}>
+                Henüz çalışma oturumu yok.{'\n'}Pomodoro ekranından ders çalışmaya başla!
+              </Text>
+            </View>
+          ) : (
+            <>
+              {(() => {
+                const maxMins = Math.max(...subjectStats.map((it) => it.total_minutes), 1);
+                return subjectStats.map((item, i) => {
+                  const pct = Math.max(4, (item.total_minutes / maxMins) * 100);
+                  const color = getSubjectColor(item.subject);
+                  const hrs = item.total_hours;
+                  const mins = item.total_minutes % 60;
+                  const timeStr = hrs >= 1
+                    ? `${hrs}s${mins > 0 ? ` ${mins}dk` : ''}`
+                    : `${item.total_minutes}dk`;
+                  return (
+                    <View key={i} style={[s.bRow, i > 0 && { marginTop: 14 }]}>
+                      <View style={s.bRowTop}>
+                        <View style={s.bRowLeft}>
+                          <View style={[s.bDot, { backgroundColor: color }]} />
+                          <Text style={s.bSubject}>{item.subject}</Text>
+                        </View>
+                        <Text style={[s.bTime, { color }]}>{timeStr}</Text>
+                      </View>
+                      <View style={s.bTrack}>
+                        <LinearGradient
+                          colors={[color, `${color}80`]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 0 }}
+                          style={[s.bFill, { width: `${pct}%` as any }]}
+                        />
+                      </View>
+                    </View>
+                  );
+                });
+              })()}
+            </>
+          )}
         </View>
 
         {/* Settings Section */}
@@ -193,6 +295,21 @@ const s = StyleSheet.create({
   statIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   statValue: { fontSize: 20, fontFamily: F.xbld, color: TXT, marginBottom: 4 },
   statLabel: { fontSize: 11, fontFamily: F.reg, color: MUTED },
+
+  // Ders Dağılımı (Breakdown)
+  breakdownCard: { backgroundColor: SURFACE, borderRadius: 16, padding: 18, marginBottom: 24 },
+  breakdownLoading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 16, justifyContent: 'center' },
+  breakdownLoadingText: { fontSize: 13, fontFamily: F.reg, color: MUTED },
+  breakdownEmpty: { alignItems: 'center', paddingVertical: 24, gap: 12 },
+  breakdownEmptyText: { fontSize: 13, fontFamily: F.reg, color: MUTED, textAlign: 'center', lineHeight: 20 },
+  bRow: {},
+  bRowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  bRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bDot: { width: 10, height: 10, borderRadius: 5 },
+  bSubject: { fontSize: 14, fontFamily: F.sem, color: TXT },
+  bTime: { fontSize: 13, fontFamily: F.bld },
+  bTrack: { height: 8, backgroundColor: '#1A2540', borderRadius: 4, overflow: 'hidden' },
+  bFill: { height: '100%', borderRadius: 4 },
 
   // Settings
   sectionLabel: { fontSize: 10, fontFamily: F.bld, color: MUTED, letterSpacing: 1.5, marginBottom: 10, marginLeft: 4 },

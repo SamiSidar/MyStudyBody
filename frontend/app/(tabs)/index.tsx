@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl,
+  Modal, Animated, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -11,6 +12,30 @@ import { MOCK_WEEKLY_HOURS, MOCK_WEAK_SUBJECTS, DAYS } from '../../src/constants
 import { F } from '../../src/constants/fonts';
 import { useAuth } from '../../src/context/AuthContext';
 import { apiFetch } from '../../src/utils/api';
+
+const { height: SCREEN_H } = Dimensions.get('window');
+
+interface SubjectStat {
+  subject: string;
+  total_minutes: number;
+  total_hours: number;
+}
+
+const SUBJECT_COLORS: Record<string, string> = {
+  Math: '#4FACFE',
+  Physics: '#A78BFA',
+  Chemistry: '#FB923C',
+  Biology: '#10B981',
+  History: '#F59E0B',
+  Geography: '#34D399',
+  Turkish: '#F472B6',
+  English: '#60A5FA',
+  Philosophy: '#C084FC',
+};
+
+function getSubjectColor(subject: string): string {
+  return SUBJECT_COLORS[subject] || '#4FACFE';
+}
 
 const BAR_MAX_H = 80;
 
@@ -34,6 +59,13 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [chartPeriod, setChartPeriod] = useState<'Day' | 'Week'>('Week');
 
+  // Subject breakdown modal
+  const [showSubjectModal, setShowSubjectModal] = useState(false);
+  const [subjectStats, setSubjectStats] = useState<SubjectStat[]>([]);
+  const [allTimeHours, setAllTimeHours] = useState<number>(0);
+  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const slideAnim = useRef(new Animated.Value(SCREEN_H)).current;
+
   const totalHours = weeklyHours.reduce((a, b) => a + b, 0).toFixed(1);
   const maxHour = Math.max(...weeklyHours, 0.1);
   const todayIndex = (new Date().getDay() + 6) % 7;
@@ -55,8 +87,40 @@ export default function Dashboard() {
     } catch (_) {}
   };
 
+  const openSubjectModal = async () => {
+    setShowSubjectModal(true);
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 11,
+    }).start();
+    if (subjectStats.length === 0) {
+      setLoadingSubjects(true);
+      try {
+        const res = await apiFetch('/api/stats/subjects');
+        if (res.ok) {
+          const d = await res.json();
+          setSubjectStats(d.subjects || []);
+          setAllTimeHours(d.total_hours || 0);
+        }
+      } catch (_) {} finally {
+        setLoadingSubjects(false);
+      }
+    }
+  };
+
+  const closeSubjectModal = () => {
+    Animated.timing(slideAnim, {
+      toValue: SCREEN_H,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => setShowSubjectModal(false));
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
+    setSubjectStats([]); // force refresh subject stats too
     await fetchData();
     setRefreshing(false);
   };
@@ -92,30 +156,38 @@ export default function Dashboard() {
         </Text>
 
         {/* ── Performance Overview ── */}
+        <TouchableOpacity onPress={openSubjectModal} activeOpacity={0.88}>
         <View style={s.perfCard}>
-          <Text style={s.perfLabel}>PERFORMANCE OVERVIEW</Text>
-          <Text style={s.perfTitle}>Total Study Hours</Text>
+          <View style={s.perfCardTop}>
+            <Text style={s.perfLabel}>PERFORMANCE OVERVIEW</Text>
+            <View style={s.perfTapHint}>
+              <Feather name="bar-chart-2" size={13} color={CYAN} />
+              <Text style={s.perfTapHintText}>Ders dağılımı</Text>
+            </View>
+          </View>
+          <Text style={s.perfTitle}>Toplam Ders Saati</Text>
           <View style={s.perfValueRow}>
             <Text testID="total-hours-value" style={s.perfValue}>{totalHours}</Text>
-            <Text style={s.perfUnit}> hrs</Text>
+            <Text style={s.perfUnit}> saat</Text>
           </View>
           <View style={s.statsRow}>
             <View style={s.statBox}>
-              <Text style={s.statBoxLabel}>Weekly{`\n`}Goal</Text>
+              <Text style={s.statBoxLabel}>Haftalık{`\n`}Hedef</Text>
               <Text style={s.statBoxValue}>82%</Text>
             </View>
             <View style={s.statDivider} />
             <View style={s.statBox}>
-              <Text style={s.statBoxLabel}>Efficiency</Text>
+              <Text style={s.statBoxLabel}>Verimlilik</Text>
               <Text style={s.statBoxValue}>94%</Text>
             </View>
             <View style={s.statDivider} />
             <View style={s.statBox}>
-              <Text style={s.statBoxLabel}>Focus{`\n`}Score</Text>
+              <Text style={s.statBoxLabel}>Odak{`\n`}Skoru</Text>
               <Text style={[s.statBoxValue, { color: CYAN }]}>A+</Text>
             </View>
           </View>
         </View>
+        </TouchableOpacity>
 
         {/* ── Weak Subjects ── */}
         <View style={s.weakCard}>
@@ -226,6 +298,81 @@ export default function Dashboard() {
           </View>
         </View>
       </ScrollView>
+
+      {/* ── Subject Breakdown Modal ── */}
+      <Modal visible={showSubjectModal} transparent animationType="none" onRequestClose={closeSubjectModal}>
+        <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={closeSubjectModal}>
+          <Animated.View style={[s.modalSheet, { transform: [{ translateY: slideAnim }] }]}>
+            <TouchableOpacity activeOpacity={1}>
+              {/* Handle */}
+              <View style={s.modalHandle} />
+
+              {/* Modal Header */}
+              <View style={s.modalHeader}>
+                <View>
+                  <Text style={s.modalTitle}>Ders Dağılımı</Text>
+                  <Text style={s.modalSub}>
+                    {allTimeHours > 0 ? `Toplam ${allTimeHours} saat ders` : 'Tüm zamanlar'}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={closeSubjectModal} style={s.modalClose}>
+                  <Feather name="x" size={18} color={MUTED} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Content */}
+              {loadingSubjects ? (
+                <View style={s.modalLoading}>
+                  <Feather name="loader" size={24} color={CYAN} />
+                  <Text style={s.modalLoadingText}>Yükleniyor...</Text>
+                </View>
+              ) : subjectStats.length === 0 ? (
+                <View style={s.modalEmpty}>
+                  <Feather name="clock" size={40} color={MUTED} />
+                  <Text style={s.modalEmptyTitle}>Henüz oturum yok</Text>
+                  <Text style={s.modalEmptyText}>
+                    Pomodoro ile ders çalışıp kaydet butonuna bas, burada görünecek.
+                  </Text>
+                </View>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 380 }}>
+                  {(() => {
+                    const maxMins = Math.max(...subjectStats.map((s) => s.total_minutes), 1);
+                    return subjectStats.map((item, i) => {
+                      const pct = Math.max(4, (item.total_minutes / maxMins) * 100);
+                      const color = getSubjectColor(item.subject);
+                      const hrs = item.total_hours;
+                      const mins = item.total_minutes % 60;
+                      const timeStr = hrs >= 1
+                        ? `${hrs}s ${mins > 0 ? mins + 'dk' : ''}`
+                        : `${item.total_minutes}dk`;
+                      return (
+                        <View key={i} style={s.subjectRow}>
+                          <View style={s.subjectRowLeft}>
+                            <View style={[s.subjectDot, { backgroundColor: color }]} />
+                            <Text style={s.subjectName} numberOfLines={1}>{item.subject}</Text>
+                          </View>
+                          <View style={s.barArea}>
+                            <View style={s.barTrackModal}>
+                              <LinearGradient
+                                colors={[color, `${color}99`]}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={[s.barFill, { width: `${pct}%` as any }]}
+                              />
+                            </View>
+                          </View>
+                          <Text style={[s.subjectTime, { color }]}>{timeStr}</Text>
+                        </View>
+                      );
+                    });
+                  })()}
+                </ScrollView>
+              )}
+            </TouchableOpacity>
+          </Animated.View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -249,7 +396,10 @@ const s = StyleSheet.create({
 
   // Performance
   perfCard: { backgroundColor: SURFACE, borderRadius: 18, padding: 20, marginBottom: 16 },
-  perfLabel: { fontSize: 10, fontFamily: F.sem, color: MUTED, letterSpacing: 1.4, marginBottom: 4 },
+  perfCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  perfLabel: { fontSize: 10, fontFamily: F.sem, color: MUTED, letterSpacing: 1.4 },
+  perfTapHint: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: `${CYAN}15`, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  perfTapHintText: { fontSize: 10, fontFamily: F.sem, color: CYAN },
   perfTitle: { fontSize: 13, fontFamily: F.reg, color: MUTED, marginBottom: 4 },
   perfValueRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 18 },
   perfValue: { fontSize: 52, fontFamily: F.xbld, color: TXT, lineHeight: 60 },
@@ -259,6 +409,35 @@ const s = StyleSheet.create({
   statDivider: { width: 1, backgroundColor: SURFACE_HL, marginVertical: 4 },
   statBoxLabel: { fontSize: 10, fontFamily: F.reg, color: MUTED, textAlign: 'center', lineHeight: 14, marginBottom: 6 },
   statBoxValue: { fontSize: 20, fontFamily: F.xbld, color: TXT },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: '#0C1628',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 40,
+    maxHeight: SCREEN_H * 0.75,
+  },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#2A3560', alignSelf: 'center', marginBottom: 22 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
+  modalTitle: { fontSize: 22, fontFamily: F.xbld, color: TXT },
+  modalSub: { fontSize: 12, fontFamily: F.reg, color: MUTED, marginTop: 4 },
+  modalClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: SURFACE_HL, alignItems: 'center', justifyContent: 'center' },
+  modalLoading: { paddingVertical: 40, alignItems: 'center', gap: 12 },
+  modalLoadingText: { fontSize: 14, fontFamily: F.reg, color: MUTED },
+  modalEmpty: { paddingVertical: 40, alignItems: 'center', gap: 12, paddingHorizontal: 20 },
+  modalEmptyTitle: { fontSize: 16, fontFamily: F.bld, color: TXT },
+  modalEmptyText: { fontSize: 13, fontFamily: F.reg, color: MUTED, textAlign: 'center', lineHeight: 20 },
+  subjectRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14, gap: 10 },
+  subjectRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, width: 90 },
+  subjectDot: { width: 10, height: 10, borderRadius: 5 },
+  subjectName: { fontSize: 13, fontFamily: F.sem, color: TXT, flex: 1 },
+  barArea: { flex: 1 },
+  barTrackModal: { height: 10, backgroundColor: SURFACE_HL, borderRadius: 5, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 5 },
+  subjectTime: { fontSize: 13, fontFamily: F.bld, width: 52, textAlign: 'right' },
 
   // Weak Subjects
   weakCard: { backgroundColor: SURFACE, borderRadius: 18, padding: 18, marginBottom: 16 },

@@ -212,6 +212,28 @@ async def get_errors(x_user_id: Optional[str] = Header(default=None)):
     return docs
 
 
+@api_router.get("/stats/subjects")
+async def get_subject_stats(x_user_id: Optional[str] = Header(default=None)):
+    """Total study time per subject (all-time), plus overall totals."""
+    uid = require_user(x_user_id)
+    docs = await db.study_sessions.find({"user_id": uid}, {"_id": 0}).to_list(1000)
+    stats: Dict[str, int] = {}
+    for d in docs:
+        subj = d.get("subject", "Unknown")
+        stats[subj] = stats.get(subj, 0) + d.get("duration_minutes", 0)
+    total_minutes = sum(stats.values())
+    subject_list = [
+        {"subject": s, "total_minutes": m, "total_hours": round(m / 60, 1)}
+        for s, m in sorted(stats.items(), key=lambda x: -x[1])
+    ]
+    return {
+        "subjects": subject_list,
+        "total_minutes": total_minutes,
+        "total_hours": round(total_minutes / 60, 1),
+        "session_count": len(docs),
+    }
+
+
 @api_router.get("/stats/errors")
 async def get_error_stats(x_user_id: Optional[str] = Header(default=None)):
     """Error count per subject with unique topics, filtered by user."""

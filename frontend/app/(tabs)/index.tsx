@@ -6,6 +6,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import Svg, {
+  Circle, Defs, LinearGradient as SvgGradient, Stop, Text as SvgText,
+} from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { GRADIENTS } from '../../src/constants/colors';
 import { MOCK_WEEKLY_HOURS, MOCK_WEAK_SUBJECTS, DAYS } from '../../src/constants/mockData';
@@ -22,8 +25,8 @@ interface SubjectStat {
 }
 
 const SUBJECT_COLORS: Record<string, string> = {
-  Math: '#4FACFE',
-  Physics: '#A78BFA',
+  Math: '#4361EE',
+  Physics: '#7B5CF0',
   Chemistry: '#FB923C',
   Biology: '#10B981',
   History: '#F59E0B',
@@ -34,22 +37,89 @@ const SUBJECT_COLORS: Record<string, string> = {
 };
 
 function getSubjectColor(subject: string): string {
-  return SUBJECT_COLORS[subject] || '#4FACFE';
+  return SUBJECT_COLORS[subject] || '#4361EE';
 }
 
 const BAR_MAX_H = 80;
 
-// Premium dark palette
-const BG = '#080D1A';
-const SURFACE = '#0F1829';
-const SURFACE_HL = '#1A2540';
+// New electric blue + purple dark palette
+const BG = '#060B18';
+const SURFACE = '#0E1525';
+const SURFACE_HL = '#162035';
 const TXT = '#EDF2FF';
 const MUTED = '#718096';
-const CYAN = '#4FACFE';
+const BLUE = '#4361EE';
+const PURPLE = '#7B5CF0';
 const ORANGE = '#FF6D00';
+const CYAN = '#4361EE';   // alias kept for compatibility
 const RED = '#EF4444';
-const PURPLE_START = '#A78BFA';
-const PURPLE_END = '#7C3AED';
+const PURPLE_START = '#7B5CF0';
+const PURPLE_END = '#4361EE';
+
+// ── SVG Donut Ring Chart ──────────────────────────────
+function DonutChart({ hours, goalPct }: { hours: string; goalPct: number | null }) {
+  const SIZE = 148;
+  const STROKE = 13;
+  const R = (SIZE - STROKE) / 2;
+  const circ = 2 * Math.PI * R;
+  const progress = goalPct != null ? Math.min(goalPct / 100, 1) : 0.38;
+  const offset = circ * (1 - progress);
+
+  return (
+    <Svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
+      <Defs>
+        <SvgGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <Stop offset="0%" stopColor={BLUE} />
+          <Stop offset="100%" stopColor={PURPLE} />
+        </SvgGradient>
+      </Defs>
+      {/* Background ring */}
+      <Circle
+        cx={SIZE / 2} cy={SIZE / 2} r={R}
+        stroke="#162035" strokeWidth={STROKE} fill="none"
+      />
+      {/* Progress ring */}
+      <Circle
+        cx={SIZE / 2} cy={SIZE / 2} r={R}
+        stroke="url(#ringGrad)" strokeWidth={STROKE} fill="none"
+        strokeDasharray={circ}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        rotation={-90}
+        origin={`${SIZE / 2}, ${SIZE / 2}`}
+      />
+      {/* Center: hours */}
+      <SvgText
+        x={SIZE / 2} y={SIZE / 2 - 8}
+        textAnchor="middle"
+        fill="#EDF2FF"
+        fontSize="30"
+        fontWeight="bold"
+      >
+        {hours}
+      </SvgText>
+      <SvgText
+        x={SIZE / 2} y={SIZE / 2 + 12}
+        textAnchor="middle"
+        fill="#718096"
+        fontSize="11"
+      >
+        saat / hafta
+      </SvgText>
+      {goalPct != null && (
+        <SvgText
+          x={SIZE / 2} y={SIZE / 2 + 30}
+          textAnchor="middle"
+          fill={BLUE}
+          fontSize="12"
+          fontWeight="bold"
+        >
+          {`%${goalPct} hedef`}
+        </SvgText>
+      )}
+    </Svg>
+  );
+}
 
 interface PerfStats {
   weekly_goal_pct: number | null;
@@ -176,42 +246,46 @@ export default function Dashboard() {
         {/* ── Performance Overview ── */}
         <TouchableOpacity onPress={openSubjectModal} activeOpacity={0.88}>
         <View style={s.perfCard}>
+          {/* Card header */}
           <View style={s.perfCardTop}>
-            <Text style={s.perfLabel}>PERFORMANCE OVERVIEW</Text>
+            <Text style={s.perfLabel}>HAFTALIK PERFORMANS</Text>
             <View style={s.perfTapHint}>
-              <Feather name="bar-chart-2" size={13} color={CYAN} />
-              <Text style={s.perfTapHintText}>Ders dağılımı</Text>
+              <Feather name="bar-chart-2" size={12} color={BLUE} />
+              <Text style={s.perfTapHintText}>Dağılım</Text>
             </View>
           </View>
-          <Text style={s.perfTitle}>Toplam Ders Saati</Text>
-          <View style={s.perfValueRow}>
-            <Text testID="total-hours-value" style={s.perfValue}>{totalHours}</Text>
-            <Text style={s.perfUnit}> saat</Text>
-          </View>
-          <View style={s.statsRow}>
-            <View style={s.statBox}>
-              <Text style={s.statBoxLabel}>Haftalık{`\n`}Hedef</Text>
-              <Text style={s.statBoxValue}>
-                {perfStats.weekly_goal_pct != null ? `${perfStats.weekly_goal_pct}%` : '—'}
-              </Text>
-            </View>
-            <View style={s.statDivider} />
-            <View style={s.statBox}>
-              <Text style={s.statBoxLabel}>Verimlilik</Text>
-              <Text style={s.statBoxValue}>
-                {perfStats.efficiency_pct != null ? `${perfStats.efficiency_pct}%` : '—'}
-              </Text>
-            </View>
-            <View style={s.statDivider} />
-            <View style={s.statBox}>
-              <Text style={s.statBoxLabel}>Odak{`\n`}Skoru</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={[s.statBoxValue, { color: CYAN }]}>
-                  {perfStats.focus_grade ?? '—'}
+
+          {/* Body: Donut + Stats side by side */}
+          <View style={s.perfBody}>
+            {/* Donut ring chart */}
+            <DonutChart hours={totalHours} goalPct={perfStats.weekly_goal_pct} />
+
+            {/* Right side stats */}
+            <View style={s.perfRightStats}>
+              <View style={s.perfStatItem}>
+                <Text style={s.perfStatLabel}>Haftalık Hedef</Text>
+                <Text style={s.perfStatValue}>
+                  {perfStats.weekly_goal_pct != null ? `${perfStats.weekly_goal_pct}%` : '—'}
                 </Text>
-                {perfStats.notifications_disabled && perfStats.focus_grade && (
-                  <Feather name="bell-off" size={12} color={CYAN} />
-                )}
+              </View>
+              <View style={s.perfStatSep} />
+              <View style={s.perfStatItem}>
+                <Text style={s.perfStatLabel}>Verimlilik</Text>
+                <Text style={s.perfStatValue}>
+                  {perfStats.efficiency_pct != null ? `${perfStats.efficiency_pct}%` : '—'}
+                </Text>
+              </View>
+              <View style={s.perfStatSep} />
+              <View style={s.perfStatItem}>
+                <Text style={s.perfStatLabel}>Odak Skoru</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={[s.perfStatValue, { color: BLUE }]}>
+                    {perfStats.focus_grade ?? '—'}
+                  </Text>
+                  {perfStats.notifications_disabled && perfStats.focus_grade && (
+                    <Feather name="bell-off" size={11} color={BLUE} />
+                  )}
+                </View>
               </View>
             </View>
           </View>
@@ -252,12 +326,12 @@ export default function Dashboard() {
         {/* ── Action Cards ── */}
         <TouchableOpacity
           testID="start-pomodoro-btn"
-          style={[s.actionCard, { borderColor: CYAN }]}
+          style={[s.actionCard, { borderColor: BLUE }]}
           onPress={() => router.push('/(tabs)/pomodoro')}
           activeOpacity={0.85}
         >
-          <View style={[s.actionIconBox, { backgroundColor: `${CYAN}22` }]}>
-            <Feather name="play-circle" size={22} color={CYAN} />
+          <View style={[s.actionIconBox, { backgroundColor: `${BLUE}22` }]}>
+            <Feather name="play-circle" size={22} color={BLUE} />
           </View>
           <View style={s.actionInfo}>
             <Text style={s.actionTitle}>Start Pomodoro</Text>
@@ -413,43 +487,41 @@ const s = StyleSheet.create({
   // Header
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 18 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: `${CYAN}20`, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: `${CYAN}40` },
-  appTitle: { fontSize: 18, fontFamily: F.bld, color: CYAN, letterSpacing: 0.2 },
-  streakBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: SURFACE, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: `${ORANGE}30` },
+  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: `${BLUE}20`, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: `${BLUE}40` },
+  appTitle: { fontSize: 18, fontFamily: F.bld, color: BLUE, letterSpacing: 0.2 },
+  streakBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: SURFACE, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1, borderColor: `${ORANGE}40` },
   streakNum: { fontSize: 15, fontFamily: F.bld, color: TXT },
 
   // Welcome
   welcome: { fontSize: 13, fontFamily: F.reg, color: MUTED, marginBottom: 6 },
   headline: { fontSize: 34, fontFamily: F.xbld, color: TXT, lineHeight: 42, marginBottom: 22 },
-  headlineAccent: { color: CYAN, fontFamily: F.xbld },
+  headlineAccent: { color: BLUE, fontFamily: F.xbld },
 
-  // Performance
-  perfCard: { backgroundColor: SURFACE, borderRadius: 18, padding: 20, marginBottom: 16 },
-  perfCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  perfLabel: { fontSize: 10, fontFamily: F.sem, color: MUTED, letterSpacing: 1.4 },
-  perfTapHint: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: `${CYAN}15`, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  perfTapHintText: { fontSize: 10, fontFamily: F.sem, color: CYAN },
-  perfTitle: { fontSize: 13, fontFamily: F.reg, color: MUTED, marginBottom: 4 },
-  perfValueRow: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 18 },
-  perfValue: { fontSize: 52, fontFamily: F.xbld, color: TXT, lineHeight: 60 },
-  perfUnit: { fontSize: 18, fontFamily: F.sem, color: MUTED, marginBottom: 8 },
-  statsRow: { flexDirection: 'row', alignItems: 'stretch' },
-  statBox: { flex: 1, alignItems: 'center', paddingVertical: 8 },
-  statDivider: { width: 1, backgroundColor: SURFACE_HL, marginVertical: 4 },
-  statBoxLabel: { fontSize: 10, fontFamily: F.reg, color: MUTED, textAlign: 'center', lineHeight: 14, marginBottom: 6 },
-  statBoxValue: { fontSize: 20, fontFamily: F.xbld, color: TXT },
+  // Performance Card — new donut layout
+  perfCard: { backgroundColor: SURFACE, borderRadius: 22, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: `${BLUE}18` },
+  perfCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  perfLabel: { fontSize: 10, fontFamily: F.bld, color: BLUE, letterSpacing: 1.6 },
+  perfTapHint: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: `${BLUE}15`, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
+  perfTapHintText: { fontSize: 10, fontFamily: F.sem, color: BLUE },
+  // Donut layout
+  perfBody: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  perfRightStats: { flex: 1, gap: 0 },
+  perfStatItem: { paddingVertical: 10 },
+  perfStatLabel: { fontSize: 10, fontFamily: F.reg, color: MUTED, letterSpacing: 0.8, marginBottom: 4 },
+  perfStatValue: { fontSize: 22, fontFamily: F.xbld, color: TXT },
+  perfStatSep: { height: 1, backgroundColor: SURFACE_HL },
 
   // Modal
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
   modalSheet: {
-    backgroundColor: '#0C1628',
+    backgroundColor: '#0A1120',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 24,
     paddingBottom: 40,
     maxHeight: SCREEN_H * 0.75,
   },
-  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#2A3560', alignSelf: 'center', marginBottom: 22 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#1E2D4A', alignSelf: 'center', marginBottom: 22 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
   modalTitle: { fontSize: 22, fontFamily: F.xbld, color: TXT },
   modalSub: { fontSize: 12, fontFamily: F.reg, color: MUTED, marginTop: 4 },
@@ -496,9 +568,9 @@ const s = StyleSheet.create({
   trendsSub: { fontSize: 11, fontFamily: F.reg, color: MUTED, lineHeight: 16 },
   trendsToggle: { flexDirection: 'row', backgroundColor: SURFACE_HL, borderRadius: 10, padding: 3 },
   toggleBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  toggleBtnActive: { backgroundColor: BG },
+  toggleBtnActive: { backgroundColor: `${BLUE}30`, borderWidth: 1, borderColor: `${BLUE}40` },
   toggleTxt: { fontSize: 12, fontFamily: F.sem, color: MUTED },
-  toggleTxtActive: { color: TXT },
+  toggleTxtActive: { color: BLUE },
 
   // Chart
   chartRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: BAR_MAX_H + 24 },

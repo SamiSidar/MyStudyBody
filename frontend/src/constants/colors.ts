@@ -1,17 +1,19 @@
 // ── Premium Dark Theme ────────────────────────────────
 export const darkColors = {
-  background: '#080D1A',        // Deep midnight black-blue
-  surface: '#0F1829',           // Card surface
-  surfaceHighlight: '#1A2540',  // Elevated surface
-  primary: '#4FACFE',           // Cyan (gradient end)
+  background: '#060B18',        // Deep midnight
+  surface: '#0E1525',           // Card surface
+  surfaceHighlight: '#162035',  // Elevated surface
+  primary: '#4361EE',           // Electric blue (reference palette)
+  primarySoft: '#5B7BFF',       // Lighter electric blue
+  purple: '#7B5CF0',            // Violet accent
   secondary: '#FF6D00',         // Energetic orange
   textPrimary: '#EDF2FF',       // Crisp white-blue
   textSecondary: '#718096',     // Muted slate
-  border: '#1A2540',
+  border: '#1E2D4A',
   success: '#10B981',
   error: '#EF4444',
-  tabBarBg: '#080D1A',
-  tabBarActive: '#4FACFE',
+  tabBarBg: '#060B18',
+  tabBarActive: '#4361EE',
   tabBarInactive: '#4A5568',
 };
 
@@ -20,7 +22,9 @@ export const lightColors = {
   background: '#F0F4FF',
   surface: '#FFFFFF',
   surfaceHighlight: '#E2E8F0',
-  primary: '#2979FF',
+  primary: '#4361EE',
+  primarySoft: '#5B7BFF',
+  purple: '#7B5CF0',
   secondary: '#FF6D00',
   textPrimary: '#0F172A',
   textSecondary: '#64748B',
@@ -28,17 +32,18 @@ export const lightColors = {
   success: '#10B981',
   error: '#EF4444',
   tabBarBg: '#FFFFFF',
-  tabBarActive: '#2979FF',
+  tabBarActive: '#4361EE',
   tabBarInactive: '#94A3B8',
 };
 
 // ── Gradient Tokens ───────────────────────────────────
 export const GRADIENTS = {
-  study:     ['#00F2FE', '#4FACFE'] as const,  // Neon-mint → Cyan
+  study:     ['#4361EE', '#7B5CF0'] as const,  // Electric blue → Violet
   break:     ['#10B981', '#059669'] as const,  // Emerald → Green
   secondary: ['#FF6D00', '#FFAB40'] as const,  // Orange → Amber
-  hours:     ['#1E40AF', '#4FACFE'] as const,  // Deep blue → Cyan
-  purple:    ['#A78BFA', '#7C3AED'] as const,  // Lavender → Violet
+  hours:     ['#4361EE', '#7B5CF0'] as const,  // Blue → Purple
+  purple:    ['#7B5CF0', '#4361EE'] as const,  // Violet → Blue
+  ring:      ['#4361EE', '#7B5CF0', '#00D2FF'] as const,  // Ring gradient
 };
 
 export type Colors = typeof darkColors;
